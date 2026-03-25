@@ -272,3 +272,117 @@ For the current run:
 - size: `9,762,317,527` bytes
 
 This file is intended as a per-individual genome annotation track rather than a compact summary table.
+
+## Gene Flank BED Generation
+
+A combined gene-flank BED file was generated from:
+
+- `v5.gff3`
+- `data/v5.fa.gz.fai`
+
+### Goal
+
+Construct one combined BED file containing:
+
+- all 2 kb regions 5' upstream of genes
+- all 2 kb regions 3' downstream of genes
+
+with strand-aware interpretation of upstream and downstream.
+
+### Coordinate rules
+
+Gene models were taken from `v5.gff3` using `gene` features only.
+
+Because the GFF uses 1-based closed coordinates, intervals were converted to BED-style 0-based half-open coordinates before writing the output.
+
+Chromosome lengths from `data/v5.fa.gz.fai` were used to clip flank intervals so they did not extend below 0 or beyond the chromosome end.
+
+### Strand-aware definitions
+
+For a `+` strand gene:
+
+- 5' upstream = 2 kb immediately before the gene start
+- 3' downstream = 2 kb immediately after the gene end
+
+For a `-` strand gene:
+
+- 5' upstream = 2 kb immediately after the gene end
+- 3' downstream = 2 kb immediately before the gene start
+
+### Output file
+
+The combined flank BED file is:
+
+- `results/v5_gene_flanks_2kb.bed`
+
+### Output columns
+
+This BED has 6 columns:
+
+- column 1: chromosome
+- column 2: start
+- column 3: end
+- column 4: gene ID
+- column 5: flank class
+- column 6: strand
+
+Interpretation of column 5:
+
+- `5prime_upstream`
+- `3prime_downstream`
+
+### Script used
+
+This file was generated with:
+
+- `scripts/extract_gene_flanks.py`
+
+## Counting Gene-Flank Overlaps for the Per-Individual Tiled BED
+
+To count, for each interval in `results/jri_v5_with_tiles.bed`, how many gene-flank intervals it overlaps, a two-step `bedtools intersect -c` pipeline was used.
+
+### Chromosome-name normalization
+
+`results/jri_v5_with_tiles.bed` uses chromosome names like:
+
+- `Chr1`
+
+while `results/v5_gene_flanks_2kb.bed` uses chromosome names like:
+
+- `chr1`
+
+So the tiled BED was normalized on the fly before intersection:
+
+- `Chr1` -> `chr1`
+- `Chr2` -> `chr2`
+- etc.
+
+### Bedtools command
+
+```bash
+awk 'BEGIN{FS=OFS="\t"}
+{
+  chrom = $1
+  if (chrom ~ /^Chr/) chrom = "chr" substr(chrom, 4)
+  print chrom, $2, $3, $4, $5
+}' results/jri_v5_with_tiles.bed \
+| bedtools intersect -a stdin \
+    -b <(awk '$5=="5prime_upstream"' results/v5_gene_flanks_2kb.bed) \
+    -c \
+| bedtools intersect -a stdin \
+    -b <(awk '$5=="3prime_downstream"' results/v5_gene_flanks_2kb.bed) \
+    -c \
+> results/jri_v5_with_tiles_flank_counts.bed
+```
+
+### Resulting output columns
+
+The resulting file has 7 columns:
+
+- column 1: chromosome
+- column 2: start
+- column 3: end
+- column 4: individual identity
+- column 5: original `0/1` interval flag
+- column 6: count of overlapping `5prime_upstream` intervals
+- column 7: count of overlapping `3prime_downstream` intervals
