@@ -12,7 +12,7 @@ import pandas as pd
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Plot dual-anchor metagene profiles for CO and DSB signal BED files."
+        description="Plot dual-anchor metagene profiles for one or two signal BED files."
     )
     gene_group = parser.add_mutually_exclusive_group(required=True)
     gene_group.add_argument(
@@ -32,8 +32,7 @@ def parse_args():
     )
     parser.add_argument(
         "--dsb-bed",
-        required=True,
-        help="DSB signal BED with columns: chr, start, end, count.",
+        help="Optional DSB signal BED with columns: chr, start, end, count.",
     )
     parser.add_argument(
         "--flank-bin-size",
@@ -178,7 +177,7 @@ def load_signal(path):
 
 genes = load_genes(GENE_FILE)
 co = load_signal(CO_FILE)
-dsb = load_signal(DSB_FILE)
+dsb = load_signal(DSB_FILE) if DSB_FILE else None
 
 n_up = FLANK_SIZE // FLANK_BIN
 n_inner = INNER_SIZE // INNER_BIN
@@ -218,7 +217,7 @@ def build_signal_dict(df):
 
 GENE_DICT = build_gene_dict(genes)
 CO_DICT = build_signal_dict(co)
-DSB_DICT = build_signal_dict(dsb)
+DSB_DICT = build_signal_dict(dsb) if dsb is not None else None
 
 
 def add_binned_counts(profile, mids, counts, low, high, offset, bin_size, lower_bound, upper_bound):
@@ -346,7 +345,7 @@ def smooth(values, window):
 
 
 co_raw = smooth(aggregate(CO_DICT), SMOOTH)
-dsb_raw = smooth(aggregate(DSB_DICT), SMOOTH)
+dsb_raw = smooth(aggregate(DSB_DICT), SMOOTH) if DSB_DICT is not None else None
 
 TSS_START = OFF_TSS
 TSS_END = OFF_BODY
@@ -376,7 +375,8 @@ fig, ax = plt.subplots(1, 1, figsize=(6, 4))
 x = np.arange(TOTAL)
 
 ax.plot(x, co_raw, label="CO")
-ax.plot(x, dsb_raw, label="DSB")
+if dsb_raw is not None:
+    ax.plot(x, dsb_raw, label="DSB")
 ax.set_title("Dual-anchor metagene")
 ax.set_ylabel("Density per bp")
 ax.legend()

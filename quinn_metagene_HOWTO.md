@@ -1,6 +1,6 @@
 # quinn_metagene.py how-to
 
-## Typical run with GFF3
+## Typical run with GFF3 and two tracks
 
 ```bash
 python quinn_metagene.py \
@@ -12,13 +12,23 @@ python quinn_metagene.py \
   --inner-bin-size 100
 ```
 
+## Single-track run
+
+```bash
+python quinn_metagene.py \
+  --gff3 data/v5.genes.gff3 \
+  --co-bed co.bed \
+  --flank-bin-size 500 \
+  --body-bins 50 \
+  --inner-bin-size 100
+```
+
 ## Typical run with the legacy gene BED
 
 ```bash
 python quinn_metagene.py \
   --gene-bed genes.bed \
   --co-bed co.bed \
-  --dsb-bed dsb.bed \
   --flank-bin-size 500 \
   --body-bins 50 \
   --inner-bin-size 100
@@ -31,6 +41,7 @@ python quinn_metagene.py \
 - `--smooth-window 5`: moving-average smoothing window
 - `--output custom.pdf`: output PDF name
 - `--no-show`: skip the interactive plot window
+- `--dsb-bed dsb.bed`: add the optional second signal track
 
 ## Notes
 

@@ -1,6 +1,6 @@
 # quinn_metagene.py
 
-`quinn_metagene.py` plots CO and DSB dual-anchor metagene profiles.
+`quinn_metagene.py` plots one or two dual-anchor metagene profiles.
 
 It keeps the original profile layout:
 - upstream flank
@@ -21,7 +21,7 @@ It keeps the original profile layout:
 ## Inputs
 
 - `--co-bed`: BED file for CO signal
-- `--dsb-bed`: BED file for DSB signal
+- `--dsb-bed`: optional BED file for DSB signal
 - `--gff3`: gene annotation in GFF/GFF3 format
 - `--gene-bed`: legacy BED-style gene annotation
 
@@ -32,6 +32,8 @@ Signal BED files must have at least 3 columns:
 4. count (optional)
 
 If the count column is missing, the script uses `1`.
+
+If `--dsb-bed` is omitted, the script plots only the CO track.
 
 ## Output
 
