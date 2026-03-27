@@ -31,7 +31,9 @@ Signal BED files must have at least 3 columns:
 3. end
 4. count (optional)
 
-If the count column is missing, the script uses `1`.
+If column 4 is missing, the script uses `1` for that interval.
+
+If column 4 is present but non-numeric, that row is also assigned a count of `1`.
 
 If `--dsb-bed` is omitted, the script plots only the CO track.
 

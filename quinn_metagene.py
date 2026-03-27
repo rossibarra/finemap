@@ -158,17 +158,19 @@ def load_signal(path):
     if signal.shape[1] < 3:
         raise SystemExit(f"Signal BED must have at least 3 columns: {path}")
 
-    signal = signal.iloc[:, :4].copy()
-    signal.columns = ["chr", "start", "end", "count"][: signal.shape[1]]
-    if "count" not in signal.columns:
+    if signal.shape[1] >= 4:
+        signal = signal.iloc[:, :4].copy()
+        signal.columns = ["chr", "start", "end", "count"]
+    else:
+        signal = signal.iloc[:, :3].copy()
+        signal.columns = ["chr", "start", "end"]
         signal["count"] = 1.0
 
     signal["chr"] = signal["chr"].map(normalize_chrom_name)
     signal["start"] = pd.to_numeric(signal["start"], errors="coerce")
     signal["end"] = pd.to_numeric(signal["end"], errors="coerce")
-    signal["count"] = pd.to_numeric(signal["count"], errors="coerce")
+    signal["count"] = pd.to_numeric(signal["count"], errors="coerce").fillna(1.0)
     signal = signal.dropna(subset=["chr", "start", "end"]).copy()
-    signal["count"] = signal["count"].fillna(1.0)
     signal["start"] = signal["start"].astype(np.int64)
     signal["end"] = signal["end"].astype(np.int64)
     signal["mid"] = ((signal["start"] + signal["end"]) // 2).astype(np.int64)
