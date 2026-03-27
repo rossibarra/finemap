@@ -2,221 +2,369 @@
 
 #### module load python/3.9.19
 
-#### USAGE: script.py co.bed dsb.bed 500 50 100
-
+import argparse
 import sys
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
-# =====================================================
-# usage system & input files
-# =====================================================
 
-GENE_FILE = "/home2/qyj2/from_maizegdb/v5/b73_v5_gene_tss_tts_sort.bed"
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Plot dual-anchor metagene profiles for CO and DSB signal BED files."
+    )
+    gene_group = parser.add_mutually_exclusive_group(required=True)
+    gene_group.add_argument(
+        "--gff3",
+        dest="gff3_file",
+        help="Gene annotation in GFF/GFF3 format.",
+    )
+    gene_group.add_argument(
+        "--gene-bed",
+        dest="gene_bed_file",
+        help="Legacy BED-like gene file with columns: chr, start, end, len, dot, strand, type.",
+    )
+    parser.add_argument(
+        "--co-bed",
+        required=True,
+        help="CO signal BED with columns: chr, start, end, count.",
+    )
+    parser.add_argument(
+        "--dsb-bed",
+        required=True,
+        help="DSB signal BED with columns: chr, start, end, count.",
+    )
+    parser.add_argument(
+        "--flank-bin-size",
+        type=int,
+        required=True,
+        help="Bin size in bp for upstream and downstream flanks.",
+    )
+    parser.add_argument(
+        "--body-bins",
+        type=int,
+        required=True,
+        help="Number of bins used for the scaled gene body.",
+    )
+    parser.add_argument(
+        "--inner-bin-size",
+        type=int,
+        required=True,
+        help="Bin size in bp for the TSS and TTS inner windows.",
+    )
+    parser.add_argument(
+        "--flank-size",
+        type=int,
+        default=10000,
+        help="Flank size in bp on each side of the gene. Default: 10000.",
+    )
+    parser.add_argument(
+        "--inner-size",
+        type=int,
+        default=2000,
+        help="Inner window size in bp at TSS and TTS. Default: 2000.",
+    )
+    parser.add_argument(
+        "--smooth-window",
+        type=int,
+        default=5,
+        help="Moving-average smoothing window size. Default: 5.",
+    )
+    parser.add_argument(
+        "--output",
+        default="dual_anchor_metagene.pdf",
+        help="Output PDF path. Default: dual_anchor_metagene.pdf.",
+    )
+    parser.add_argument(
+        "--no-show",
+        action="store_true",
+        help="Write the PDF without opening an interactive plot window.",
+    )
+    return parser.parse_args()
 
-CO_FILE  = sys.argv[1]
-DSB_FILE = sys.argv[2]
 
-# independent bin sizes
-FLANK_BIN  = int(sys.argv[3]) 
-BODY_BIN   = int(sys.argv[4]) 
-INNER_BIN  = int(sys.argv[5])
+ARGS = parse_args()
 
-# region sizes
-FLANK_SIZE = 10000
-INNER_SIZE = 2000
+GENE_FILE = ARGS.gff3_file or ARGS.gene_bed_file
+CO_FILE = ARGS.co_bed
+DSB_FILE = ARGS.dsb_bed
+FLANK_BIN = ARGS.flank_bin_size
+BODY_BIN = ARGS.body_bins
+INNER_BIN = ARGS.inner_bin_size
+FLANK_SIZE = ARGS.flank_size
+INNER_SIZE = ARGS.inner_size
+SMOOTH = ARGS.smooth_window
+OUTPUT = ARGS.output
 
-SMOOTH = 5
 
-# =====================================================
-# define gene 
-# =====================================================
+def normalize_chrom_name(value):
+    if pd.isna(value):
+        return value
+    text = str(value).strip()
+    if text.lower().startswith("chr"):
+        return f"chr{text[3:]}"
+    return text
 
-n_up    = FLANK_SIZE // FLANK_BIN
+
+def load_genes(path):
+    if path.endswith((".gff3", ".gff", ".gff3.gz", ".gff.gz")):
+        genes = pd.read_csv(
+            path,
+            sep="\t",
+            header=None,
+            comment="#",
+            names=[
+                "chr",
+                "source",
+                "feature",
+                "start",
+                "end",
+                "score",
+                "strand",
+                "phase",
+                "attributes",
+            ],
+            usecols=list(range(9)),
+        )
+        genes = genes[genes["feature"] == "gene"].copy()
+        genes = genes[["chr", "start", "end", "strand"]]
+        genes["start"] = pd.to_numeric(genes["start"], errors="coerce") - 1
+        genes["end"] = pd.to_numeric(genes["end"], errors="coerce")
+        genes["len"] = genes["end"] - genes["start"]
+        genes["dot"] = "."
+        genes["type"] = "gene"
+        genes = genes[["chr", "start", "end", "len", "dot", "strand", "type"]]
+    else:
+        genes = pd.read_csv(
+            path,
+            sep="\t",
+            header=None,
+            names=["chr", "start", "end", "len", "dot", "strand", "type"],
+            usecols=list(range(7)),
+        )
+
+    genes["chr"] = genes["chr"].map(normalize_chrom_name)
+    genes["start"] = pd.to_numeric(genes["start"], errors="coerce")
+    genes["end"] = pd.to_numeric(genes["end"], errors="coerce")
+    genes = genes.dropna(subset=["chr", "start", "end", "strand"]).copy()
+    genes["start"] = genes["start"].astype(np.int64)
+    genes["end"] = genes["end"].astype(np.int64)
+    genes["strand"] = genes["strand"].astype(str)
+    return genes
+
+
+def load_signal(path):
+    signal = pd.read_csv(path, sep="\t", header=None)
+    if signal.shape[1] < 3:
+        raise SystemExit(f"Signal BED must have at least 3 columns: {path}")
+
+    signal = signal.iloc[:, :4].copy()
+    signal.columns = ["chr", "start", "end", "count"][: signal.shape[1]]
+    if "count" not in signal.columns:
+        signal["count"] = 1.0
+
+    signal["chr"] = signal["chr"].map(normalize_chrom_name)
+    signal["start"] = pd.to_numeric(signal["start"], errors="coerce")
+    signal["end"] = pd.to_numeric(signal["end"], errors="coerce")
+    signal["count"] = pd.to_numeric(signal["count"], errors="coerce")
+    signal = signal.dropna(subset=["chr", "start", "end"]).copy()
+    signal["count"] = signal["count"].fillna(1.0)
+    signal["start"] = signal["start"].astype(np.int64)
+    signal["end"] = signal["end"].astype(np.int64)
+    signal["mid"] = ((signal["start"] + signal["end"]) // 2).astype(np.int64)
+    return signal
+
+
+genes = load_genes(GENE_FILE)
+co = load_signal(CO_FILE)
+dsb = load_signal(DSB_FILE)
+
+n_up = FLANK_SIZE // FLANK_BIN
 n_inner = INNER_SIZE // INNER_BIN
-n_body  = BODY_BIN  
+n_body = BODY_BIN
 
 TOTAL = n_up + n_inner + n_body + n_inner + n_up
 
-# offsets
-OFF_TSS  = n_up
+OFF_TSS = n_up
 OFF_BODY = OFF_TSS + n_inner
-OFF_TTS  = OFF_BODY + n_body
+OFF_TTS = OFF_BODY + n_body
 OFF_DOWN = OFF_TTS + n_inner
 
-# =====================================================
-# load & process data
-# =====================================================
 
-genes = pd.read_csv(
-    GENE_FILE, sep="\t", header=None,
-    names=["chr","start","end","len","dot","strand","type"]
-)
+def build_gene_dict(df):
+    gene_dict = {}
+    for chrom, sub in df.groupby("chr", sort=False):
+        gene_dict[chrom] = {
+            "start": sub["start"].to_numpy(dtype=np.int64, copy=True),
+            "end": sub["end"].to_numpy(dtype=np.int64, copy=True),
+            "strand": sub["strand"].to_numpy(copy=True),
+        }
+    return gene_dict
 
-co = pd.read_csv(
-    CO_FILE, sep="\t", header=None,
-    names=["chr","start","end","count"]
-)
-dsb = pd.read_csv(
-    DSB_FILE, sep="\t", header=None,
-    names=["chr","start","end","count"]
-)
 
-co["mid"]  = ((co.start + co.end)//2).astype(int)
-dsb["mid"] = ((dsb.start + dsb.end)//2).astype(int)
+def build_signal_dict(df):
+    signal_dict = {}
+    for chrom, sub in df.groupby("chr", sort=False):
+        mids = sub["mid"].to_numpy(dtype=np.int64, copy=True)
+        counts = sub["count"].to_numpy(dtype=np.float64, copy=True)
+        order = np.argsort(mids, kind="mergesort")
+        signal_dict[chrom] = {
+            "mid": mids[order],
+            "count": counts[order],
+        }
+    return signal_dict
 
-co_chr  = {c:df for c,df in co.groupby("chr")}
-dsb_chr = {c:df for c,df in dsb.groupby("chr")}
 
-# =====================================================
-# gene profile function
-# =====================================================
+GENE_DICT = build_gene_dict(genes)
+CO_DICT = build_signal_dict(co)
+DSB_DICT = build_signal_dict(dsb)
 
-def gene_profile(g, signal_dict):
 
-    profile = np.zeros(TOTAL)
-    if g.chr not in signal_dict:
+def add_binned_counts(profile, mids, counts, low, high, offset, bin_size, lower_bound, upper_bound):
+    left = np.searchsorted(mids, low, side="left")
+    right = np.searchsorted(mids, high, side="left")
+    region_mids = mids[left:right]
+    if region_mids.size == 0:
+        return
+    idx = offset + ((region_mids - low) // bin_size).astype(np.int64)
+    valid = (idx >= lower_bound) & (idx < upper_bound)
+    if np.any(valid):
+        np.add.at(profile, idx[valid], counts[left:right][valid])
+
+
+def add_scaled_body_counts(profile, mids, counts, body_start, body_end):
+    left = np.searchsorted(mids, body_start, side="left")
+    right = np.searchsorted(mids, body_end, side="left")
+    region_mids = mids[left:right]
+    if region_mids.size == 0:
+        return
+    body_len = max(1, body_end - body_start)
+    scaled = ((region_mids - body_start) / body_len) * n_body
+    idx = OFF_BODY + scaled.astype(np.int64)
+    valid = (idx >= OFF_BODY) & (idx < OFF_TTS)
+    if np.any(valid):
+        np.add.at(profile, idx[valid], counts[left:right][valid])
+
+
+def gene_profile(chrom, start, end, strand, signal_dict):
+    profile = np.zeros(TOTAL, dtype=np.float64)
+    chrom_signal = signal_dict.get(chrom)
+    if chrom_signal is None:
         return profile
 
-    sig = signal_dict[g.chr]
-    m = sig.mid.values
-    c = sig["count"].values
+    mids = chrom_signal["mid"]
+    counts = chrom_signal["count"]
 
-    # strand normalization
-    if g.strand == "+":
-        TSS, TTS = g.start, g.end
+    if strand == "+":
+        tss = start
+        tts = end
     else:
-        TSS, TTS = g.end, g.start
+        tss = end
+        tts = start
 
-    # gene body limits
-    body_start = TSS + INNER_SIZE
-    body_end   = TTS - INNER_SIZE
-    body_len   = max(1, body_end - body_start)
+    body_start = tss + INNER_SIZE
+    body_end = tts - INNER_SIZE
 
-    # --------------- upstream ---------------
-    mask = (m >= TSS-FLANK_SIZE) & (m < TSS)
-    idx = ((m[mask]-(TSS-FLANK_SIZE))//FLANK_BIN).astype(int)
-    valid = (idx >= 0) & (idx < n_up)
-    np.add.at(profile, idx[valid], c[mask][valid])
-
-    # --------------- TSS inner ---------------
-    mask = (m >= TSS) & (m < TSS+INNER_SIZE)
-    idx = OFF_TSS + ((m[mask]-TSS)//INNER_BIN).astype(int)
-    valid = (idx >= OFF_TSS) & (idx < OFF_BODY)
-    np.add.at(profile, idx[valid], c[mask][valid])
-
-    # --------------- scaled gene body ---------------
-    mask = (m >= body_start) & (m < body_end)
-    scaled = ((m[mask]-body_start)/body_len) * n_body
-    idx = OFF_BODY + scaled.astype(int)
-    valid = (idx >= OFF_BODY) & (idx < OFF_TTS)
-    np.add.at(profile, idx[valid], c[mask][valid])
-
-    # --------------- TTS inner ---------------
-    mask = (m >= TTS-INNER_SIZE) & (m < TTS)
-    idx = OFF_TTS + ((m[mask]-(TTS-INNER_SIZE))//INNER_BIN).astype(int)
-    valid = (idx >= OFF_TTS) & (idx < OFF_DOWN)
-    np.add.at(profile, idx[valid], c[mask][valid])
-
-    # --------------- downstream ---------------
-    mask = (m >= TTS) & (m < TTS+FLANK_SIZE)
-    idx = OFF_DOWN + ((m[mask]-TTS)//FLANK_BIN).astype(int)
-    valid = (idx >= OFF_DOWN) & (idx < TOTAL)
-    np.add.at(profile, idx[valid], c[mask][valid])
-
+    add_binned_counts(
+        profile,
+        mids,
+        counts,
+        tss - FLANK_SIZE,
+        tss,
+        0,
+        FLANK_BIN,
+        0,
+        n_up,
+    )
+    add_binned_counts(
+        profile,
+        mids,
+        counts,
+        tss,
+        tss + INNER_SIZE,
+        OFF_TSS,
+        INNER_BIN,
+        OFF_TSS,
+        OFF_BODY,
+    )
+    add_scaled_body_counts(profile, mids, counts, body_start, body_end)
+    add_binned_counts(
+        profile,
+        mids,
+        counts,
+        tts - INNER_SIZE,
+        tts,
+        OFF_TTS,
+        INNER_BIN,
+        OFF_TTS,
+        OFF_DOWN,
+    )
+    add_binned_counts(
+        profile,
+        mids,
+        counts,
+        tts,
+        tts + FLANK_SIZE,
+        OFF_DOWN,
+        FLANK_BIN,
+        OFF_DOWN,
+        TOTAL,
+    )
     return profile
 
-# =====================================================
-# aggregation function
-# =====================================================
 
 def aggregate(signal_dict):
+    profile_sum = np.zeros(TOTAL, dtype=np.float64)
+    n_profiles = 0
 
-    profiles = []
-
-    for _, g in genes.iterrows():
-        p = gene_profile(g, signal_dict)
-        if p.sum() == 0:
+    for chrom, gene_arrays in GENE_DICT.items():
+        if chrom not in signal_dict:
             continue
-        profiles.append(p)
+        starts = gene_arrays["start"]
+        ends = gene_arrays["end"]
+        strands = gene_arrays["strand"]
+        for start, end, strand in zip(starts, ends, strands):
+            profile = gene_profile(chrom, start, end, strand, signal_dict)
+            if np.any(profile):
+                profile_sum += profile
+                n_profiles += 1
 
-    profiles = np.vstack(profiles)
-    return profiles.mean(axis=0) #metagene profile
+    if n_profiles == 0:
+        return profile_sum
+    return profile_sum / n_profiles
 
-# =====================================================
-# smoothing function
-# =====================================================
 
-def smooth(x, w=3):
-    return np.convolve(x, np.ones(w)/w, mode="same")
+def smooth(values, window):
+    if window <= 1:
+        return values
+    kernel = np.ones(window, dtype=np.float64) / window
+    return np.convolve(values, kernel, mode="same")
 
-# =====================================================
-# run aggregation & smoothing
-# =====================================================
 
-co_raw  = aggregate(co_chr)
-dsb_raw = aggregate(dsb_chr)
+co_raw = smooth(aggregate(CO_DICT), SMOOTH)
+dsb_raw = smooth(aggregate(DSB_DICT), SMOOTH)
 
-co_raw  = smooth(co_raw, SMOOTH)
-dsb_raw = smooth(dsb_raw, SMOOTH)
-
-# -----------------------------------------------------
-# plot: define boundaries
-# -----------------------------------------------------
-
-TSS_START   = OFF_TSS
-TSS_END     = OFF_BODY
-
-BODY_START  = OFF_BODY
-BODY_END    = OFF_TTS
-
-TTS_START   = OFF_TTS
-TTS_END     = OFF_DOWN
-
+TSS_START = OFF_TSS
+TSS_END = OFF_BODY
+BODY_START = OFF_BODY
+BODY_END = OFF_TTS
+TTS_START = OFF_TTS
+TTS_END = OFF_DOWN
 BODY_CENTER = (BODY_START + BODY_END) / 2
 
-# -----------------------------------------------------
-# plot: helper function to format x-axis
-# -----------------------------------------------------
 
 def style_dual_anchor(ax):
-
-    # Shade TSS and TTS windows
     ax.axvspan(TSS_START, TSS_END, alpha=0.08)
     ax.axvspan(TTS_START, TTS_END, alpha=0.08)
-
-    # Anchor TSS and TTS
     ax.axvline(TSS_START, linestyle="--", linewidth=1)
     ax.axvline(TTS_END, linestyle="--", linewidth=1)
-
-    # Clean x-axis labels
-    xticks = [
-        0,
-        TSS_START,
-        BODY_CENTER,
-        TTS_END,
-        TOTAL - 1
-    ]
-
-    xlabels = [
-        "-10 kb",
-        "TSS",
-        "Gene body",
-        "TTS",
-        "+10 kb"
-    ]
-
-    ax.set_xticks(xticks)
-    ax.set_xticklabels(xlabels)
+    ax.set_xticks([0, TSS_START, BODY_CENTER, TTS_END, TOTAL - 1])
+    ax.set_xticklabels(["-10 kb", "TSS", "Gene body", "TTS", "+10 kb"])
     ax.set_xlim(0, TOTAL - 1)
 
 
-# -----------------------------------------------------
-# plot: generate metagene
-# -----------------------------------------------------
 fig, ax = plt.subplots(1, 1, figsize=(6, 4))
-
 x = np.arange(TOTAL)
 
 ax.plot(x, co_raw, label="CO")
@@ -228,9 +376,8 @@ ax.legend()
 style_dual_anchor(ax)
 
 plt.tight_layout()
-plt.savefig("dual_anchor_metagene.pdf", bbox_inches="tight")
-plt.show()
-
-
-
-
+plt.savefig(OUTPUT, bbox_inches="tight")
+if not ARGS.no_show:
+    plt.show()
+else:
+    plt.close(fig)
