@@ -37,3 +37,4 @@ python quinn_metagene.py \
 - chromosome names are normalized so `Chr1` and `chr1` match
 - GFF3 input uses `gene` features and converts starts to 0-based coordinates before plotting
 - if your BED files have only 3 columns, each interval contributes a count of `1`
+- output values are density per bp, so differing flank, inner, and scaled body bin widths are normalized before averaging

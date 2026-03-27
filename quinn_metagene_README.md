@@ -16,6 +16,7 @@ It keeps the original profile layout:
 - the original BED-style gene file is still supported with `--gene-bed`
 - positional arguments were replaced with explicit command-line flags
 - the aggregation code now uses chromosome-sorted arrays and interval lookups for better speed without changing the existing binning formulas
+- signal is now reported as density per bp so regions with different bin widths are on the same scale
 
 ## Inputs
 
@@ -35,3 +36,7 @@ If the count column is missing, the script uses `1`.
 ## Output
 
 The default output file is `dual_anchor_metagene.pdf`.
+
+The plotted values are density-normalized:
+- upstream, downstream, TSS, and TTS bins are divided by their fixed bin width
+- scaled gene-body bins are divided by their effective per-gene bin width (`body_length / number_of_body_bins`)

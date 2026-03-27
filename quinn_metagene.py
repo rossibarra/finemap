@@ -230,7 +230,8 @@ def add_binned_counts(profile, mids, counts, low, high, offset, bin_size, lower_
     idx = offset + ((region_mids - low) // bin_size).astype(np.int64)
     valid = (idx >= lower_bound) & (idx < upper_bound)
     if np.any(valid):
-        np.add.at(profile, idx[valid], counts[left:right][valid])
+        # Normalize fixed-width regions to density per bp.
+        np.add.at(profile, idx[valid], counts[left:right][valid] / float(bin_size))
 
 
 def add_scaled_body_counts(profile, mids, counts, body_start, body_end):
@@ -244,7 +245,9 @@ def add_scaled_body_counts(profile, mids, counts, body_start, body_end):
     idx = OFF_BODY + scaled.astype(np.int64)
     valid = (idx >= OFF_BODY) & (idx < OFF_TTS)
     if np.any(valid):
-        np.add.at(profile, idx[valid], counts[left:right][valid])
+        # Gene-body bins have gene-specific widths, so normalize by that width.
+        body_bin_width = body_len / float(n_body)
+        np.add.at(profile, idx[valid], counts[left:right][valid] / body_bin_width)
 
 
 def gene_profile(chrom, start, end, strand, signal_dict):
@@ -360,7 +363,12 @@ def style_dual_anchor(ax):
     ax.axvline(TSS_START, linestyle="--", linewidth=1)
     ax.axvline(TTS_END, linestyle="--", linewidth=1)
     ax.set_xticks([0, TSS_START, BODY_CENTER, TTS_END, TOTAL - 1])
-    ax.set_xticklabels(["-10 kb", "TSS", "Gene body", "TTS", "+10 kb"])
+    flank_kb = FLANK_SIZE / 1000.0
+    if flank_kb.is_integer():
+        flank_label = f"{int(flank_kb)} kb"
+    else:
+        flank_label = f"{flank_kb:g} kb"
+    ax.set_xticklabels([f"-{flank_label}", "TSS", "Gene body", "TTS", f"+{flank_label}"])
     ax.set_xlim(0, TOTAL - 1)
 
 
@@ -370,7 +378,7 @@ x = np.arange(TOTAL)
 ax.plot(x, co_raw, label="CO")
 ax.plot(x, dsb_raw, label="DSB")
 ax.set_title("Dual-anchor metagene")
-ax.set_ylabel("Density")
+ax.set_ylabel("Density per bp")
 ax.legend()
 
 style_dual_anchor(ax)
