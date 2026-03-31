@@ -73,18 +73,9 @@ For both raw and filtered calls, `event_bp` is:
 
 - `floor((left_coordinate + right_coordinate) / 2)`
 
-Additional outputs from this workflow:
-
-- `results/co_events_wide.tsv`
-- `results/jri_v5_with_tiles.bed`
-- `results/v5_gene_flanks_2kb.bed`
-- `results/jri_v5_with_tiles_flank_counts.bed`
-
 Scripts used:
 
 - `scripts/extract_co_events.py`
-- `scripts/build_individual_tiled_track.py`
-- `scripts/extract_gene_flanks.py`
 
 ### HMM-Based Crossover Workflow
 
@@ -303,7 +294,54 @@ Lift to v5:
 CrossMap bed v2v5.chain markersv2.bed markersv5.bed
 ```
 
-Then merge paired lifted endpoints back into intervals, keeping only IDs seen exactly twice on one chromosome.
+#### `jri_v5.bed` Creation
+
+`jri_v5.bed` is the combined lifted interval set derived from the Rodgers-Melnick, Penny, and European inputs above. It is not a raw concatenation of the original interval tables.
+
+Construction steps:
+
+1. Build `RodgersMelnickv2.bed`, `Pennyv2.bed`, and `eurov2.bed`.
+2. Concatenate those v2 interval BEDs.
+3. Split each interval into two single-base endpoint markers to create `markersv2.bed`.
+4. Lift those endpoints to v5 with CrossMap, producing `markersv5.bed`.
+5. Rebuild intervals from the lifted endpoint pairs.
+
+During interval rebuilding:
+
+- keep only IDs seen exactly twice total after lift-over
+- drop IDs seen once or more than twice
+- drop IDs whose two lifted endpoints land on different chromosomes
+- for retained IDs, emit one interval using the minimum lifted start and maximum lifted end
+
+The earlier repository notes recorded the interval-rebuild step as:
+
+```bash
+awk '
+{
+  id = $5
+  chrkey = $1 FS id
+
+  total[id]++
+  perchr[chrkey]++
+
+  if (!(chrkey in min_start) || $2 < min_start[chrkey]) min_start[chrkey] = $2
+  if (!(chrkey in max_end)   || $3 > max_end[chrkey])   max_end[chrkey]   = $3
+}
+END {
+  for (chrkey in perchr) {
+    split(chrkey, a, FS)
+    chr = a[1]
+    id  = a[2]
+
+    if (total[id] == 2 && perchr[chrkey] == 2) {
+      print chr, min_start[chrkey], max_end[chrkey], indiv, id
+    }
+  }
+}
+' OFS='\t' markersv5.bed | sort -k1,1 -k2,2n > jri_v5.bed
+```
+
+This produces a v5 BED of lifted crossover intervals with one row per successfully reconstructed interval.
 
 #### Ogut Marker Map
 
