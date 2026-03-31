@@ -9,6 +9,7 @@ import pandas as pd
 
 
 WARNED_CHROM_RENAMES = set()
+INTERNAL_GAP_BINS = 5
 
 
 def parse_args():
@@ -274,14 +275,14 @@ def prepare_genes(genes):
 
 def aggregate_profiles(genes, signal_dict):
     flank_bins = ARGS.flanking_bp // ARGS.bin_size
-    total_bins = flank_bins + (2 * ARGS.body_bins) + flank_bins
+    total_bins = flank_bins + ARGS.body_bins + INTERNAL_GAP_BINS + ARGS.body_bins + flank_bins
     sums = np.zeros(total_bins, dtype=np.float64)
     sumsq = np.zeros(total_bins, dtype=np.float64)
     counts = np.zeros(total_bins, dtype=np.int64)
 
     left_internal_offset = flank_bins
-    right_internal_offset = flank_bins + ARGS.body_bins
-    right_flank_offset = flank_bins + (2 * ARGS.body_bins)
+    right_internal_offset = flank_bins + ARGS.body_bins + INTERNAL_GAP_BINS
+    right_flank_offset = right_internal_offset + ARGS.body_bins
 
     for gene in genes:
         chrom = gene["chr"]
@@ -313,8 +314,9 @@ def aggregate_profiles(genes, signal_dict):
             slot = left_internal_offset + local_idx
             add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts)
 
+        right_gene_slots_start = right_flank_offset - len(right_gene_bins)
         for local_idx, (window_start, window_end) in enumerate(right_gene_bins):
-            slot = right_internal_offset + local_idx
+            slot = right_gene_slots_start + local_idx
             add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts)
 
         flank3_bins = list(iter_plus_windows(gene["flank3_low"], gene["flank3_high"], ARGS.bin_size))
@@ -328,18 +330,39 @@ def aggregate_profiles(genes, signal_dict):
     return averages, ses, counts
 
 
-def build_plot(averages, ses):
+def build_plot(averages, ses, counts):
     flank_bins = ARGS.flanking_bp // ARGS.bin_size
     total_bins = len(averages)
     x = np.arange(total_bins, dtype=np.int64)
+    gap_start = flank_bins + ARGS.body_bins
+    gap_end = gap_start + INTERNAL_GAP_BINS
+    right_internal_start = gap_end
+    right_flank_start = right_internal_start + ARGS.body_bins
 
-    fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+    fig, (ax, ax_count) = plt.subplots(
+        2,
+        1,
+        figsize=(8, 5.2),
+        sharex=True,
+        gridspec_kw={"height_ratios": [4, 1], "hspace": 0.05},
+    )
     ax.fill_between(x, averages - ses, averages + ses, alpha=0.25, linewidth=0)
     ax.plot(x, averages, linewidth=1.5)
     ax.axvline(flank_bins - 0.5, linestyle="--", linewidth=1)
-    ax.axvline(flank_bins + (2 * ARGS.body_bins) - 0.5, linestyle="--", linewidth=1)
+    ax.axvline(right_flank_start - 0.5, linestyle="--", linewidth=1)
+    ax.axvspan(gap_start - 0.5, gap_end - 0.5, color="#d9d9d9", alpha=0.6, zorder=0)
+    ax.axvline(gap_start - 0.5, linestyle=":", linewidth=1, color="gray")
+    ax.axvline(gap_end - 0.5, linestyle=":", linewidth=1, color="gray")
     ax.set_ylabel("Average signal")
     ax.set_title(ARGS.title)
+
+    ax_count.bar(x, counts, width=1.0, color="#8da0cb", edgecolor="none")
+    ax_count.axvline(flank_bins - 0.5, linestyle="--", linewidth=1)
+    ax_count.axvline(right_flank_start - 0.5, linestyle="--", linewidth=1)
+    ax_count.axvspan(gap_start - 0.5, gap_end - 0.5, color="#d9d9d9", alpha=0.6, zorder=0)
+    ax_count.axvline(gap_start - 0.5, linestyle=":", linewidth=1, color="gray")
+    ax_count.axvline(gap_end - 0.5, linestyle=":", linewidth=1, color="gray")
+    ax_count.set_ylabel("n")
 
     internal_bp = 2 * ARGS.body_bins * ARGS.bin_size
     flank_kb = ARGS.flanking_bp / 1000.0
@@ -350,17 +373,53 @@ def build_plot(averages, ses):
             return f"{int(value)} kb"
         return f"{value:g} kb"
 
-    ax.set_xticks([0, flank_bins, flank_bins + (2 * ARGS.body_bins), total_bins - 1])
-    ax.set_xticklabels(
-        [
-            f"-{kb_label(flank_kb)}",
-            "TSS",
-            "TTS",
-            f"+{kb_label(flank_kb)}",
-        ]
+    quarter_flank = flank_bins // 4
+    half_flank = flank_bins // 2
+    three_quarter_flank = (3 * flank_bins) // 4
+    downstream_len = flank_bins
+    downstream_quarter = right_flank_start + (downstream_len // 4)
+    downstream_half = right_flank_start + (downstream_len // 2)
+    downstream_three_quarter = right_flank_start + ((3 * downstream_len) // 4)
+
+    xticks = [
+        0,
+        quarter_flank,
+        half_flank,
+        three_quarter_flank,
+        flank_bins,
+        right_flank_start,
+        downstream_quarter,
+        downstream_half,
+        downstream_three_quarter,
+        total_bins - 1,
+    ]
+    xlabels = [
+        f"-{kb_label(flank_kb)}",
+        f"-{kb_label(flank_kb * 0.75)}",
+        f"-{kb_label(flank_kb * 0.5)}",
+        f"-{kb_label(flank_kb * 0.25)}",
+        "TSS",
+        "TTS",
+        f"+{kb_label(flank_kb * 0.25)}",
+        f"+{kb_label(flank_kb * 0.5)}",
+        f"+{kb_label(flank_kb * 0.75)}",
+        f"+{kb_label(flank_kb)}",
+    ]
+    dedup_ticks = []
+    dedup_labels = []
+    for tick, label in zip(xticks, xlabels):
+        if dedup_ticks and tick == dedup_ticks[-1]:
+            continue
+        dedup_ticks.append(tick)
+        dedup_labels.append(label)
+
+    ax_count.set_xticks(dedup_ticks)
+    ax_count.set_xticklabels(dedup_labels)
+    ax_count.set_xlabel(
+        f"Flank / gene windows ({ARGS.body_bins} bins from TSS, gap, {ARGS.body_bins} bins from TTS; {kb_label(internal_kb)} total shown inside gene)"
     )
-    ax.set_xlabel(f"Flank / gene window ({kb_label(internal_kb)} shown inside gene)")
     ax.set_xlim(0, total_bins - 1)
+    ax.tick_params(axis="x", labelbottom=False)
     plt.tight_layout()
     return fig
 
@@ -371,7 +430,7 @@ GENE_LAYOUT = prepare_genes(GENES)
 SIGNAL_DICT = build_signal_dict(SIGNAL)
 AVERAGES, SES, COUNTS = aggregate_profiles(GENE_LAYOUT, SIGNAL_DICT)
 
-FIG = build_plot(AVERAGES, SES)
+FIG = build_plot(AVERAGES, SES, COUNTS)
 FIG.savefig(ARGS.output, bbox_inches="tight")
 if not ARGS.no_show:
     plt.show()
