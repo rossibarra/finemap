@@ -228,6 +228,31 @@ The repository combines multiple v2-era crossover interval sources before lift-o
 - Penny interval data
 - European workbook-derived events
 
+Rodgers-Melnick source:
+
+- Rodgers-Melnick E, Bradbury PJ, Elshire RJ, Glaubitz JC, Acharya CB, Mitchell SE, Li C, Li Y, Buckler ES. 2015. *Recombination in diverse maize is stable, predictable, and associated with genetic load*. PNAS.
+- downloaded interval tables:
+  `RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt`
+  and
+  `RodgersMelnick2015PNAS_usnamImputedXOsegments.txt`
+- described in the earlier repository notes as downloaded from Panzea
+
+Penny source:
+
+- Kianian PMA, Wang M, Simons K, et al. 2018. *High-resolution crossover mapping reveals similarities and differences of male and female recombination in maize*. Nature Communications. `https://doi.org/10.1038/s41467-018-04562-5`
+- local interval tables:
+  `penny_co_v2_male.txt`
+  and
+  `penny_co_v2_female.txt`
+
+European source:
+
+- Bauer E, Falque M, Walter H, et al. 2013. *Intraspecific variation of recombination rate in maize*. Genome Biology. `https://doi.org/10.1186/gb-2013-14-9-r103`
+- workbook: `/Users/jeffreyross-ibarra/Downloads/gb-2013-14-9-r103-S4.xlsx`
+- sheet: `Table_S3`
+- columns used for crossover extraction:
+  `map`, `SNP_name`, `chr_phy`, `coordinate`, and `raw_data`
+
 Example conversions to v2 BED:
 
 ```bash
