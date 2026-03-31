@@ -41,6 +41,11 @@ def parse_args():
         help="Number of internal bins to plot on each side of the gene body.",
     )
     parser.add_argument(
+        "--uniform",
+        action="store_true",
+        help="Distribute each interval's value uniformly across its full span instead of assigning it to its midpoint.",
+    )
+    parser.add_argument(
         "--output",
         default="metaplot.pdf",
         help="Output PDF path. Default: metaplot.pdf.",
@@ -137,20 +142,32 @@ def load_signal(path):
     signal = signal.dropna(subset=["chr", "start", "end"]).copy()
     signal["start"] = signal["start"].astype(np.int64)
     signal["end"] = signal["end"].astype(np.int64)
-    signal["mid"] = ((signal["start"] + signal["end"]) // 2).astype(np.int64)
+    if not ARGS.uniform:
+        signal["mid"] = ((signal["start"] + signal["end"]) // 2).astype(np.int64)
     return signal
 
 
 def build_signal_dict(df):
     signal_dict = {}
     for chrom, sub in df.groupby("chr", sort=False):
-        mids = sub["mid"].to_numpy(dtype=np.int64, copy=True)
-        values = sub["value"].to_numpy(dtype=np.float64, copy=True)
-        order = np.argsort(mids, kind="mergesort")
-        signal_dict[chrom] = {
-            "mid": mids[order],
-            "value": values[order],
-        }
+        if ARGS.uniform:
+            starts = sub["start"].to_numpy(dtype=np.int64, copy=True)
+            ends = sub["end"].to_numpy(dtype=np.int64, copy=True)
+            values = sub["value"].to_numpy(dtype=np.float64, copy=True)
+            order = np.argsort(starts, kind="mergesort")
+            signal_dict[chrom] = {
+                "start": starts[order],
+                "end": ends[order],
+                "value": values[order],
+            }
+        else:
+            mids = sub["mid"].to_numpy(dtype=np.int64, copy=True)
+            values = sub["value"].to_numpy(dtype=np.float64, copy=True)
+            order = np.argsort(mids, kind="mergesort")
+            signal_dict[chrom] = {
+                "mid": mids[order],
+                "value": values[order],
+            }
     return signal_dict
 
 
@@ -164,12 +181,39 @@ def midpoint_sum(chrom_signal, window_start, window_end):
     return float(values[left:right].sum())
 
 
+def uniform_sum(chrom_signal, window_start, window_end):
+    starts = chrom_signal["start"]
+    ends = chrom_signal["end"]
+    values = chrom_signal["value"]
+    right = np.searchsorted(starts, window_end, side="left")
+    if right == 0:
+        return 0.0
+    starts = starts[:right]
+    ends = ends[:right]
+    values = values[:right]
+    valid = ends > window_start
+    if not np.any(valid):
+        return 0.0
+    starts = starts[valid]
+    ends = ends[valid]
+    values = values[valid]
+    overlap = np.minimum(ends, window_end) - np.maximum(starts, window_start)
+    positive = overlap > 0
+    if not np.any(positive):
+        return 0.0
+    lengths = np.maximum(1, ends[positive] - starts[positive]).astype(np.float64)
+    return float(np.sum(values[positive] * overlap[positive] / lengths))
+
+
 def add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts):
     chrom_signal = signal_dict.get(chrom)
     if chrom_signal is None:
         value = 0.0
     else:
-        value = midpoint_sum(chrom_signal, window_start, window_end)
+        if ARGS.uniform:
+            value = uniform_sum(chrom_signal, window_start, window_end)
+        else:
+            value = midpoint_sum(chrom_signal, window_start, window_end)
     sums[slot] += value
     sumsq[slot] += value * value
     counts[slot] += 1
