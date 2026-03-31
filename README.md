@@ -353,6 +353,8 @@ Behavior:
 - plots mean signal across windows
 - adds a standard-error ribbon
 - adds a lower panel showing contributing gene counts
+- does not explicitly exclude genes by length
+- reports chromosome-name normalization warnings to `stderr` when renaming occurs
 
 Signal modes:
 
@@ -407,43 +409,10 @@ Default output:
 
 - `metaplot.pdf`
 
-### `metagene_dsb_co.py`
+Display behavior:
 
-`metagene_dsb_co.py` plots one or two BED tracks around genes using two non-contiguous panels anchored at gene boundaries and exons.
-
-Layout:
-
-- left panel: upstream flank, TSS-proximal internal window, first exon, last exon
-- right panel: last exon, TTS-proximal internal window, downstream flank
-
-Current usage:
-
-```bash
-python metagene_dsb_co.py \
-  --gff v5.gff3 \
-  --bed1 example1.bed \
-  --flank 10000 20 \
-  --gene 100 20
-```
-
-Relevant arguments:
-
-- `--gff` or `--gene_bed`
-- `--bed1`
-- `--bed2`
-- `--flank SIZE_BP N_BINS`
-- `--gene SIZE_BP N_BINS`
-- `--uniform`
-
-Current behavior:
-
-- the full internal gene body is not plotted continuously
-- first and last exons are shown separately
-- exon bins are normalized by exon length before averaging
-- single-exon genes use the same exon for both exon anchors
-- genes with length `<= 2 * INNER_SIZE` are excluded
-- excluded genes are reported to `stderr`
-- output is written to `dual_anchor_metagene.pdf`
+- the plot is saved as a PDF
+- unless `--no-show` is used, the plot is also shown interactively
 
 ### Marey-Style Plotting
 
@@ -451,9 +420,13 @@ The HMM workflow also produces a Marey-style recombination summary plot with:
 
 - `scripts/plot_marey_map.py`
 
-Output:
+Behavior:
 
-- `results/marey_map_hmm_co_events.png`
+- accepts optional input and output paths as positional arguments
+- defaults to reading `results/co_events_long.tsv`
+- defaults to writing `results/marey_map_co_events.png`
+- writes a PNG figure with `fig.savefig(...)`
+- prints `Wrote <output_path>` to standard output
 
 ## Notes
 
