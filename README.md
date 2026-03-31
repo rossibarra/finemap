@@ -364,16 +364,44 @@ Manual post-lift cM adjustments were applied to preserve chromosome-wise monoton
 - on `Chr3`, `M2179` and `M2180` had their cM values swapped
 - on `Chr7`, markers `M5158` through `M5171` had their cM values reversed across the block
 
-#### Rodgers-Melnick Rate Track
+#### `finemap_v5.bed` Derivation
 
-After reconstructing unique v5 intervals, the Rodgers-Melnick intervals were converted into a per-base rate track by assigning each interval a weight of `1 / interval_length`, sweeping start and stop events, and then rescaling per chromosome to match Ogut chromosome cM spans.
+`finemap_v5.bed` augments `jri_v5.bed` with spline-interpolated genetic coordinates derived from the lifted Ogut map.
 
-Main derived outputs:
+Inputs:
 
-- `RMv5_rates.bed`
-- `RMv5_CO.bed`
-- `ogut_v5_chromosome_cM_lengths.tsv`
-- `RMv5.bed`
+- `jri_v5.bed`
+- `ogut_fifthcM_map_agpv2.csv`
+- `v2v5.chain`
+- `v5.fa.gz.fai`
+
+Method:
+
+1. Convert `ogut_fifthcM_map_agpv2.csv` markers to single-base AGPv2 BED intervals.
+2. Lift those marker intervals to B73 v5 with `CrossMap`.
+3. For each chromosome, normalize Ogut cM values so the minimum marker cM becomes `0`.
+4. Add explicit spline anchor points at `0 bp, 0 cM` and at `chromosome_end_bp, chromosome_length_cM`, where chromosome lengths in cM are taken as `max(cM) - min(cM)` from the Ogut map and chromosome lengths in bp come from `v5.fa.gz.fai`.
+5. Fit a monotone cubic spline (`PCHIP`) for `cM ~ bp` separately on each chromosome using the lifted marker positions plus the two anchors.
+6. Evaluate the spline at each `jri_v5.bed` interval start and end to obtain `start_cM` and `end_cM`.
+7. Compute `cM_per_Mb` for each interval as `(end_cM - start_cM) / ((end_bp - start_bp) / 1e6)`.
+
+Columns:
+
+- `chrom`
+- `start`
+- `end`
+- `sample`
+- `marker`
+- `start_cM`
+- `end_cM`
+- `cM_per_Mb`
+
+Length-weighted mean recombination rate across all intervals in `finemap_v5.bed`:
+
+- `1.067512 cM/Mb`
+
+This weighted mean is computed as `sum(interval_cM_span) / (sum(interval_bp_span) / 1e6)`, which is equivalent to weighting each interval's `cM_per_Mb` by its physical length in bp.
+
 
 ## Simulation Data
 
