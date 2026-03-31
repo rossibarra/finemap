@@ -163,14 +163,35 @@ def midpoint_sum(chrom_signal, window_start, window_end):
     return float(values[left:right].sum())
 
 
-def add_window(signal_dict, chrom, slot, window_start, window_end, sums, counts):
+def add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts):
     chrom_signal = signal_dict.get(chrom)
     if chrom_signal is None:
-        sums[slot] += 0.0
-        counts[slot] += 1
-        return
-    sums[slot] += midpoint_sum(chrom_signal, window_start, window_end)
+        value = 0.0
+    else:
+        value = midpoint_sum(chrom_signal, window_start, window_end)
+    sums[slot] += value
+    sumsq[slot] += value * value
     counts[slot] += 1
+
+
+def window_stats(sums, sumsq, counts):
+    means = np.divide(
+        sums,
+        counts,
+        out=np.full_like(sums, np.nan),
+        where=counts > 0,
+    )
+    variances = np.divide(
+        sumsq,
+        counts,
+        out=np.zeros_like(sums),
+        where=counts > 0,
+    ) - np.square(np.nan_to_num(means, nan=0.0))
+    variances = np.maximum(variances, 0.0)
+    ses = np.full_like(sums, np.nan)
+    valid = counts > 0
+    ses[valid] = np.sqrt(variances[valid] / counts[valid])
+    return means, ses
 
 
 def iter_plus_windows(start, end, bin_size):
@@ -255,6 +276,7 @@ def aggregate_profiles(genes, signal_dict):
     flank_bins = ARGS.flanking_bp // ARGS.bin_size
     total_bins = flank_bins + (2 * ARGS.body_bins) + flank_bins
     sums = np.zeros(total_bins, dtype=np.float64)
+    sumsq = np.zeros(total_bins, dtype=np.float64)
     counts = np.zeros(total_bins, dtype=np.int64)
 
     left_internal_offset = flank_bins
@@ -270,7 +292,7 @@ def aggregate_profiles(genes, signal_dict):
         flank5_slots_start = flank_bins - len(flank5_bins)
         for local_idx, (window_start, window_end) in enumerate(flank5_bins):
             slot = flank5_slots_start + local_idx
-            add_window(signal_dict, chrom, slot, window_start, window_end, sums, counts)
+            add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts)
 
         full_gene_bins = list(gene["iter_gene_from_tss"](gene["gene_start"], gene["gene_end"], ARGS.bin_size))
         total_gene_bins = len(full_gene_bins)
@@ -285,37 +307,34 @@ def aggregate_profiles(genes, signal_dict):
             right_gene_bins = list(
                 gene["iter_gene_to_tts"](gene["gene_start"], gene["gene_end"], ARGS.bin_size)
             )[:ARGS.body_bins]
+        right_gene_bins.reverse()
 
         for local_idx, (window_start, window_end) in enumerate(left_gene_bins):
             slot = left_internal_offset + local_idx
-            add_window(signal_dict, chrom, slot, window_start, window_end, sums, counts)
+            add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts)
 
         for local_idx, (window_start, window_end) in enumerate(right_gene_bins):
             slot = right_internal_offset + local_idx
-            add_window(signal_dict, chrom, slot, window_start, window_end, sums, counts)
+            add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts)
 
         flank3_bins = list(iter_plus_windows(gene["flank3_low"], gene["flank3_high"], ARGS.bin_size))
         if gene["flank3_reverse"]:
             flank3_bins.reverse()
         for local_idx, (window_start, window_end) in enumerate(flank3_bins):
             slot = right_flank_offset + local_idx
-            add_window(signal_dict, chrom, slot, window_start, window_end, sums, counts)
+            add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts)
 
-    averages = np.divide(
-        sums,
-        counts,
-        out=np.full_like(sums, np.nan),
-        where=counts > 0,
-    )
-    return averages, counts
+    averages, ses = window_stats(sums, sumsq, counts)
+    return averages, ses, counts
 
 
-def build_plot(averages):
+def build_plot(averages, ses):
     flank_bins = ARGS.flanking_bp // ARGS.bin_size
     total_bins = len(averages)
     x = np.arange(total_bins, dtype=np.int64)
 
     fig, ax = plt.subplots(1, 1, figsize=(8, 4))
+    ax.fill_between(x, averages - ses, averages + ses, alpha=0.25, linewidth=0)
     ax.plot(x, averages, linewidth=1.5)
     ax.axvline(flank_bins - 0.5, linestyle="--", linewidth=1)
     ax.axvline(flank_bins + (2 * ARGS.body_bins) - 0.5, linestyle="--", linewidth=1)
@@ -350,9 +369,9 @@ GENES = load_genes(ARGS.gff)
 SIGNAL = load_signal(ARGS.input)
 GENE_LAYOUT = prepare_genes(GENES)
 SIGNAL_DICT = build_signal_dict(SIGNAL)
-AVERAGES, COUNTS = aggregate_profiles(GENE_LAYOUT, SIGNAL_DICT)
+AVERAGES, SES, COUNTS = aggregate_profiles(GENE_LAYOUT, SIGNAL_DICT)
 
-FIG = build_plot(AVERAGES)
+FIG = build_plot(AVERAGES, SES)
 FIG.savefig(ARGS.output, bbox_inches="tight")
 if not ARGS.no_show:
     plt.show()
