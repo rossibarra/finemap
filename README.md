@@ -352,7 +352,6 @@ The Ogut map originates from:
 Source files:
 
 - `ogut_fifthcM_map_agpv2.csv`
-- `ogut_fifthcM_map_agpv2.bed`
 
 Lift-over:
 
