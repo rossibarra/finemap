@@ -95,6 +95,7 @@ FLANK_SIZE = ARGS.flank_size
 INNER_SIZE = ARGS.inner_size
 SMOOTH = ARGS.smooth_window
 OUTPUT = ARGS.output
+WARNED_CHROM_RENAMES = set()
 
 
 def normalize_chrom_name(value):
@@ -102,8 +103,16 @@ def normalize_chrom_name(value):
         return value
     text = str(value).strip()
     if text.lower().startswith("chr"):
-        return f"chr{text[3:]}"
-    return text
+        normalized = f"chr{text[3:]}"
+    else:
+        normalized = text
+    if normalized != text and text not in WARNED_CHROM_RENAMES:
+        print(
+            f"Warning: normalized chromosome name '{text}' -> '{normalized}'",
+            file=sys.stderr,
+        )
+        WARNED_CHROM_RENAMES.add(text)
+    return normalized
 
 
 def load_genes(path):
