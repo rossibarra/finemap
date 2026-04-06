@@ -366,41 +366,46 @@ Manual post-lift cM adjustments were applied to preserve chromosome-wise monoton
 
 #### `finemap_v5.bed` Derivation
 
-`finemap_v5.bed` augments `jri_v5.bed` with spline-interpolated genetic coordinates derived from the lifted Ogut map.
+`finemap_v5.bed` is a non-overlapping B73 v5 BED6 track derived from `jri_v5.bed` and scaled to chromosome-level genetic lengths from the Ogut map. It does not contain the original interval IDs from `jri_v5.bed`; instead it represents the interval coverage as a piecewise-constant per-bp genetic weight track.
 
 Inputs:
 
 - `jri_v5.bed`
 - `ogut_fifthcM_map_agpv2.csv`
-- `v2v5.chain`
-- `v5.fa.gz.fai`
 
 Method:
 
-1. Convert `ogut_fifthcM_map_agpv2.csv` markers to single-base AGPv2 BED intervals.
-2. Lift those marker intervals to B73 v5 with `CrossMap`.
-3. For each chromosome, normalize Ogut cM values so the minimum marker cM becomes `0`.
-4. Add explicit spline anchor points at `0 bp, 0 cM` and at `chromosome_end_bp, chromosome_length_cM`, where chromosome lengths in cM are taken as `max(cM) - min(cM)` from the Ogut map and chromosome lengths in bp come from `v5.fa.gz.fai`.
-5. Fit a monotone cubic spline (`PCHIP`) for `cM ~ bp` separately on each chromosome using the lifted marker positions plus the two anchors.
-6. Evaluate the spline at each `jri_v5.bed` interval start and end to obtain `start_cM` and `end_cM`.
-7. Compute `cM_per_Mb` for each interval as `(end_cM - start_cM) / ((end_bp - start_bp) / 1e6)`.
+1. For each row in `jri_v5.bed`, compute a per-bp interval weight of `1 / (end - start)`.
+2. Treat each interval weight as uniformly distributed across the full physical interval.
+3. Sum those weights at every covered bp, then merge consecutive bp with identical summed values to create a non-overlapping per-bp weight track.
+4. For each chromosome in `ogut_fifthcM_map_agpv2.csv`, calculate the chromosome genetic length as `max(cM) - min(cM)`.
+5. For each chromosome in the merged per-bp track, compute the total interval-weighted mass as `sum((end - start) * per_bp_weight)`.
+6. Normalize each chromosome's per-bp weights so that the interval-weighted sum on that chromosome is `1`, then multiply by that chromosome's Ogut genetic length in cM.
+7. Write the resulting chromosome-scaled per-bp values as a BED6 file with placeholder columns 4 and 5.
 
 Columns:
 
 - `chrom`
 - `start`
 - `end`
-- `sample`
-- `marker`
-- `start_cM`
-- `end_cM`
-- `cM_per_Mb`
+- `.`
+- `0`
+- `cM_per_bp`
 
-Length-weighted mean recombination rate across all intervals in `finemap_v5.bed`:
+Chromosome genetic lengths used for scaling:
 
-- `1.067512 cM/Mb`
+- `Chr1 210.4`
+- `Chr2 161.2`
+- `Chr3 163.4`
+- `Chr4 151.8`
+- `Chr5 157.0`
+- `Chr6 111.4`
+- `Chr7 138.4`
+- `Chr8 137.4`
+- `Chr9 131.2`
+- `Chr10 113.0`
 
-This weighted mean is computed as `sum(interval_cM_span) / (sum(interval_bp_span) / 1e6)`, which is equivalent to weighting each interval's `cM_per_Mb` by its physical length in bp.
+By construction, `sum((end - start) * cM_per_bp)` equals the target chromosome cM length for each chromosome.
 
 
 ## Simulation Data
