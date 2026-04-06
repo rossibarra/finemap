@@ -366,7 +366,7 @@ Manual post-lift cM adjustments were applied to preserve chromosome-wise monoton
 
 #### `finemap_v5.bed` Derivation
 
-`finemap_v5.bed` is a non-overlapping B73 v5 BED6 track derived from `jri_v5.bed` and scaled to chromosome-level genetic lengths from the Ogut map. It does not contain the original interval IDs from `jri_v5.bed`; instead it represents the interval coverage as a piecewise-constant per-bp genetic weight track.
+`finemap_v5.bed` is a non-overlapping B73 v5 BED6 track derived from `jri_v5.bed` and scaled to chromosome-level genetic lengths from the Ogut map. It represents the interval coverage as a piecewise-constant recombination map, with cumulative genetic positions and a constant `cM_per_Mb` rate within each output segment.
 
 Inputs:
 
@@ -380,17 +380,19 @@ Method:
 3. Sum those weights at every covered bp, then merge consecutive bp with identical summed values to create a non-overlapping per-bp weight track.
 4. For each chromosome in `ogut_fifthcM_map_agpv2.csv`, calculate the chromosome genetic length as `max(cM) - min(cM)`.
 5. For each chromosome in the merged per-bp track, compute the total interval-weighted mass as `sum((end - start) * per_bp_weight)`.
-6. Normalize each chromosome's per-bp weights so that the interval-weighted sum on that chromosome is `1`, then multiply by that chromosome's Ogut genetic length in cM.
-7. Write the resulting chromosome-scaled per-bp values as a BED6 file with placeholder columns 4 and 5.
+6. Normalize each chromosome's per-bp weights so that the interval-weighted sum on that chromosome is `1`, then multiply by that chromosome's Ogut genetic length in cM to obtain a chromosome-specific `cM_per_bp` track.
+7. Walk the non-overlapping segments in chromosome order and accumulate `cM_start` and `cM_end` for each segment as `previous_cM_end` and `cM_start + (end - start) * cM_per_bp`.
+8. Convert `cM_per_bp` to `cM_per_Mb` by multiplying by `1e6`.
+9. Write the final BED6 file as `chrom`, `start`, `end`, `cM_start`, `cM_end`, `cM_per_Mb`.
 
 Columns:
 
 - `chrom`
 - `start`
 - `end`
-- `.`
-- `0`
-- `cM_per_bp`
+- `cM_start`
+- `cM_end`
+- `cM_per_Mb`
 
 Chromosome genetic lengths used for scaling:
 
@@ -405,7 +407,7 @@ Chromosome genetic lengths used for scaling:
 - `Chr9 131.2`
 - `Chr10 113.0`
 
-By construction, `sum((end - start) * cM_per_bp)` equals the target chromosome cM length for each chromosome.
+By construction, the last `cM_end` on each chromosome equals the target chromosome cM length, and `cM_per_Mb = ((cM_end - cM_start) / (end - start)) * 1e6`.
 
 
 ## Simulation Data
