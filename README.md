@@ -418,6 +418,39 @@ Chromosome genetic lengths used for scaling:
 
 By construction, the last `cM_end` on each chromosome equals the target chromosome cM length, and `cM_per_Mb = ((cM_end - cM_start) / (end - start)) * 1e6`.
 
+#### Per-Chromosome HapMap Exports
+
+The repository also includes per-chromosome HapMap-format recombination maps derived from `finemap_v5.bed` for use with `msprime.RateMap.read_hapmap()`.
+
+Outputs:
+
+- `data/hapmap/chr1.hapmap.tsv`
+- `data/hapmap/chr2.hapmap.tsv`
+- `data/hapmap/chr3.hapmap.tsv`
+- `data/hapmap/chr4.hapmap.tsv`
+- `data/hapmap/chr5.hapmap.tsv`
+- `data/hapmap/chr6.hapmap.tsv`
+- `data/hapmap/chr7.hapmap.tsv`
+- `data/hapmap/chr8.hapmap.tsv`
+- `data/hapmap/chr9.hapmap.tsv`
+- `data/hapmap/chr10.hapmap.tsv`
+
+Format:
+
+- header: `Chromosome`, `Position(bp)`, `Rate(cM/Mb)`, `Map(cM)`
+- one chromosome per file, because `msprime.RateMap.read_hapmap()` expects each file to contain a single contig
+- chromosome names normalized to `chr1` through `chr10`
+
+Method:
+
+1. Split `finemap_v5.bed` by chromosome.
+2. Convert each BED segment boundary into HapMap breakpoint rows using `start -> cM_start` and `end -> cM_end`.
+3. Merge duplicate breakpoint positions only when the cumulative `Map(cM)` values agree.
+4. Add a leading `0 bp, 0 cM` row when the first BED segment does not start at `0`.
+5. Compute `Rate(cM/Mb)` for each row as the constant rate from that position to the next breakpoint.
+6. Append a final row at the full chromosome length from `data/v5.fa.gz.fai`; if `finemap_v5.bed` ends earlier, this terminal interval is padded with `0` recombination rate.
+7. Set the final HapMap row rate to `0`, matching the `msprime` HapMap parser expectation for the terminal position.
+
 
 ## Simulation Data
 
