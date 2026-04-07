@@ -394,6 +394,15 @@ Columns:
 - `cM_end`
 - `cM_per_Mb`
 
+Validation and error handling:
+
+- Within each chromosome, `start`, `end`, `cM_start`, and `cM_end` should be strictly increasing in row order.
+- Each row must also satisfy `end > start` and `cM_end > cM_start`.
+- If a row has `cM_end == cM_start`, or a very small negative `cM_end - cM_start` consistent with floating-point error, treat it as a boundary tie and replace `cM_end` with `cM_start + 1e-6`.
+- After adjusting such a row, shift the next row's `cM_start` to the same corrected value when needed so chromosome-wise `cM` coordinates remain strictly increasing across rows.
+- Set `cM_per_Mb = 0` for any row that required this tie-breaking correction.
+- Any other non-increasing span, including larger `cM` reversals or any `bp` reversal, should be reported as an error range for manual review rather than silently corrected.
+
 Chromosome genetic lengths used for scaling:
 
 - `Chr1 210.4`
