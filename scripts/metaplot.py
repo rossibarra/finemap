@@ -406,7 +406,7 @@ def build_plot(averages, ses, counts):
     ax_count.axvspan(gap_start - 0.5, gap_end - 0.5, color="#d9d9d9", alpha=0.6, zorder=0)
     ax_count.axvline(gap_start - 0.5, linestyle=":", linewidth=1, color="gray")
     ax_count.axvline(gap_end - 0.5, linestyle=":", linewidth=1, color="gray")
-    ax_count.set_ylabel("n")
+    ax_count.set_ylabel("Genes\ncontributing")
 
     internal_bp = 2 * ARGS.body_bins * ARGS.bin_size
     flank_kb = ARGS.flanking_bp / 1000.0

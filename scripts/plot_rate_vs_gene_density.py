@@ -96,18 +96,18 @@ def binned_medians(x, y, n_bins=20):
 def plot(df):
     fig, ax = plt.subplots(figsize=(6, 5))
     ax.scatter(
-        df["cM_per_Mb"], df["gene_density"],
+        df["gene_density"], df["cM_per_Mb"],
         s=4, alpha=0.3, linewidths=0, color="#2166ac", zorder=2,
     )
     med_x, med_y = binned_medians(
-        df["cM_per_Mb"].values, df["gene_density"].values
+        df["gene_density"].values, df["cM_per_Mb"].values
     )
     ax.plot(med_x, med_y, color="#d62728", linewidth=2,
             label="Binned median", zorder=3)
-    ax.set_xlabel("Recombination rate (cM/Mb)", fontsize=11)
-    ax.set_ylabel("Gene density (genes / Mb)", fontsize=11)
+    ax.set_xlabel("Gene density (genes / Mb)", fontsize=11)
+    ax.set_ylabel("Recombination rate (cM/Mb)", fontsize=11)
     ax.set_title(
-        "Gene density vs recombination rate\n(100 kb windows, chr1–10)", fontsize=11
+        "Recombination rate vs gene density\n(100 kb windows, chr1–10)", fontsize=11
     )
     ax.legend(fontsize=9)
     fig.tight_layout()

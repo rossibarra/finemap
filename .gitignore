@@ -1,6 +1,7 @@
 data/v5/gff3
 *.bak
 results/*
+!results/*.png
 *.bak2
 data/*.fa.gz
 data/*.fa.gz.fai

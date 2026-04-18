@@ -7,11 +7,15 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
 
 ## Input Data
 
-### Reference Files
+### Reference Files 
 
 - `data/v5.fa.gz.fai` — B73 v5 chromosome lengths
 - `data/v5.genes.gff3` — B73 v5 protein-coding gene annotations
 - `data/NAM_centromere_coords-cenH3.csv` — B73 centromere coordinates (CenH3-based)
+
+Reference data downloaded from [MaizeGDB](https://www.maizegdb.org/):
+
+Margaret R Woodhouse, Ethalinda K Cannon, John L Portwood 2nd, Jack M Gardiner, Rita K Hayford, Olivia Haley, Carson M Andorf. (2025) Tools and Resources at the Maize Genetics and Genomics Database (MaizeGDB). Cold Spring Harb Protoc. 2025(1). 10.1101/pdb.over108430
 
 ### Crossover Interval Sources
 
@@ -159,12 +163,12 @@ cat jri_rm_euro_v5.bed \
 
 `jri_v5.bed` contains 373,747 crossover intervals across four sources:
 
-| Source | Intervals | Retention |
-|--------|-----------|-----------|
-| Rodgers-Melnick NAM | 88,863 | — |
-| European HMM | 21,026 | — |
-| Samayoa LR13/LR14 landrace | 136,709 | ~99.7% |
-| Samayoa teosinte | 127,149 | ~99.7% |
+| Source | Raw intervals | Lifted | Retention |
+|--------|--------------|--------|-----------|
+| Rodgers-Melnick NAM | 135,995 | 88,863 | ~65.3% |
+| European HMM | 32,439 | 21,026 | ~64.8% |
+| Samayoa LR13/LR14 landrace | 137,100 | 136,709 | ~99.7% |
+| Samayoa teosinte | 127,546 | 127,149 | ~99.7% |
 
 ### Step 4 — Deriving `finemap_v5.bed`
 
@@ -216,6 +220,8 @@ Output: `results/marey_ogut_vs_finemap.png`
 python scripts/plot_marey_comparison.py
 ```
 
+![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)
+
 ### Recombination Rate Around Genes
 
 `scripts/metaplot.py` computes mean signal in bins across gene bodies. To plot recombination rate with 5 kb flanks and 500 bp windows at each gene end:
@@ -234,6 +240,8 @@ python scripts/metaplot.py \
   --output results/metaplot_recombination.pdf \
   --no-show
 ```
+
+![Recombination rate around genes](results/metaplot_recombination.png)
 
 Uses 38,418 protein-coding genes on chr1–chr10. With `--bin-size 100` and `--body-bins 5`, each gene-end window is exactly 500 bp; flanks extend 5 kb from TSS and TTS. The `--uniform` flag distributes each segment's rate across its full physical span rather than assigning it to a midpoint.
 
@@ -261,6 +269,8 @@ Output: `results/rate_vs_gene_density.png`
 python scripts/plot_rate_vs_gene_density.py
 ```
 
+![Recombination rate vs gene density](results/rate_vs_gene_density.png)
+
 ## Simulation Regions
 
 Simulated BED region sets with interval lengths drawn from the empirical distribution of `jri_v5.bed`, placed on B73 v5 chromosomes chr1–chr10. Used for comparison with observed crossover distributions.
@@ -273,6 +283,14 @@ Simulated BED region sets with interval lengths drawn from the empirical distrib
 | `data/example4.bed` | Enriched in strand-aware 3′ gene flanks |
 
 Script: `scripts/simulate_example_regions.py`
+
+Metaplots across all four sets (5 kb flanks, 500 bp gene-end windows):
+
+```bash
+python scripts/plot_example_metaplots.py
+```
+
+![Metaplots of simulated region sets](results/example_metaplots.png)
 
 ## Notes
 
