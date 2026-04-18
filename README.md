@@ -1,264 +1,121 @@
 # finemap
 
-This repository contains workflows for deriving maize crossover interval sets, lifting them onto B73 v5 coordinates, generating simulated comparison region sets, and plotting gene-centered summary tracks.
+Builds a piecewise-constant recombination map (`finemap_v5.bed`) for maize on B73 v5 coordinates by combining crossover intervals from four published datasets, normalizing to Ogut chromosome-scale genetic lengths, and exporting per-chromosome HapMap files for use with `msprime`.
 
-The material below consolidates the previous `euro_readme.md`, `meta_readme.md`, `simulation_readme.md`, and `hmm_methods.md` notes into one project README, with the workflow split into:
+## Input Data
 
-- data manipulation and lift-over
-- simulation data
-- plotting code
+### Reference Files
 
-## Data Manipulation And Lift-Over
+- `data/Zm-B73-REFERENCE-GRAMENE-4.0.fa.gz` — B73 AGPv4 reference, indexed with `samtools faidx`
+- `data/v5.fa.gz.fai` — B73 v5 chromosome lengths
+- `data/v5.genes.gff3` — B73 v5 protein-coding gene annotations
+- `data/NAM_centromere_coords-cenH3.csv` — B73 centromere coordinates (CenH3-based)
 
-### European Workbook Crossover Extraction
+### Crossover Interval Sources
 
-European crossover candidates were extracted from the workbook:
+Four published crossover interval datasets are combined. The European intervals (AGPv2) were called in-house from the Bauer et al. SNP workbook; the other three come as pre-called interval tables.
 
-- `/Users/jeffreyross-ibarra/Downloads/gb-2013-14-9-r103-S4.xlsx`
+| Source | Assembly | Citation |
+|--------|----------|----------|
+| Rodgers-Melnick NAM | AGPv2 | Rodgers-Melnick E et al. 2015. *Recombination in diverse maize is stable, predictable, and associated with genetic load*. PNAS. |
+| European HMM | AGPv2 | Bauer E et al. 2013. *Intraspecific variation of recombination rate in maize*. Genome Biology. `https://doi.org/10.1186/gb-2013-14-9-r103` |
+| Samayoa LR13/LR14 landrace | AGPv4 | Samayoa LF et al. 2021. *Domestication reshaped the genetic basis of inbreeding depression in a maize landrace compared to its wild relative, teosinte*. PLoS Genetics 17(12): e1009797. `https://doi.org/10.1371/journal.pgen.1009797` |
+| Samayoa teosinte | AGPv4 | same |
 
-Sheet used:
+Raw Samayoa interval files (columns: `taxon`, `chr`, `start`, `end`):
 
-- `Table_S3`
+- `data/xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt`
+- `data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_AGPv4_filtered0210.txt`
 
-Columns used:
+### Genetic Map
 
-- `map`
-- `SNP_name`
-- `chr_phy`
-- `coordinate`
-- `raw_data`
+`data/ogut_fifthcM_map_agpv2.csv` — fifth-cM marker map in AGPv2 coordinates, used to set chromosome-scale genetic lengths for normalization.
 
-`raw_data` was interpreted as a per-population genotype string, where each character corresponds to one anonymous individual at one SNP. Because the workbook mixes populations and the string length varies by `map`, all calling was done separately within each population.
+Ogut F et al. 2015. *Joint-multiple family linkage analysis predicts within-family variation better than single-family analysis of the maize nested association mapping population*. Heredity.
 
-Anonymous sample IDs were assigned as:
+## Pipeline
 
-- `MAP_ind001`
-- `MAP_ind002`
-- etc.
+### Step 1 — European HMM Crossover Calling
 
-Base preprocessing:
+European crossovers were called from the Bauer et al. SNP workbook (`gb-2013-14-9-r103-S4.xlsx`, sheet `Table_S3`) using an HMM pipeline. This produces the 21,026 European intervals that feed into `jri_v5.bed`.
 
-1. Read `Table_S3`.
-2. Group rows by `map`.
-3. Drop rows with missing `map`, missing `SNP_name`, missing `raw_data`, missing coordinate, or `chr_phy == 0`.
-4. Drop short `raw_data` strings of length `6`.
-5. Sort each population by chromosome and coordinate.
-6. Treat each character position in `raw_data` as one individual.
-7. Scan each chromosome independently.
-8. Ignore genotype states other than `A` and `B`.
+Script: `scripts/hmm_co_pipeline.py`
 
-#### Raw Switch-Based Calls
+**Marker cleaning** (per population):
 
-The raw event table is:
+1. Remove rows with missing fields, `chr_phy == 0`, or `raw_data` length ≤ 6.
+2. Deduplicate markers at the same `(chromosome, coordinate)`, keeping the row with the most informative genotypes.
+3. Remove individuals with missingness > 0.30.
+4. Remove markers with missingness > 0.20.
+5. Remove markers with informative A fraction outside 0.10–0.90.
+6. Remove markers with isolated-flip rate > 0.12.
 
-- `results/co_events_long.tsv`
+This run retained 23 cleaned population matrices and 2,209 individuals.
 
-A crossover was called whenever consecutive informative markers changed from `A -> B` or `B -> A`. Noninformative states were skipped until the next informative marker.
+**HMM model:** run per population, chromosome, and individual. States: `A`, `B`. Emissions: match 0.98, mismatch 0.02, missing 0.50. Distance-aware transitions: base rate 1e-8 per bp, clamped to [1e-6, 0.05]. Decoded with Viterbi. A crossover interval is called at each state change; adjacent events within 2,000,000 bp are merged. Produced 32,439 intervals.
 
-#### Filtered Switch-Based Calls
+Outputs: `results/hmm_cleaned_matrices/`, `results/hmm_co_events_long.tsv`, `results/hmm_qc_summary.tsv`
 
-The filtered event table is:
+A Marey map of the HMM intervals can be produced with `scripts/plot_marey_map.py` (reads `results/co_events_long.tsv`, writes `results/marey_map_co_events.png`).
 
-- `results/co_events_long_filtered.tsv`
+### Step 2 — Lift-Over To B73 v5
 
-Filtering was run on informative-state runs rather than single-marker flips. A filtered call required:
+All sources are lifted using CrossMap with an endpoint-split approach: each interval is split into two single-base endpoint markers, lifted independently, then reconstructed by taking the minimum lifted start and maximum lifted end for pairs where both endpoints map to the same chromosome. Intervals where either endpoint fails to lift or lands on a different chromosome are discarded.
 
-- a state change between adjacent informative runs
-- at least `2` informative markers in the new-state run
-- at least `1,000,000` bp spanned by the new-state run
+**Chain files:**
 
-After run-based calling, adjacent calls within `2,000,000` bp for the same sample and chromosome were removed as likely short double-crossover artifacts.
+- `data/v2v5.chain` — AGPv2 → B73 v5, derived from an AnchorWave whole-genome alignment
+- `data/v4v5.chain` — AGPv4 → B73 v5, downloaded from MaizeGDB (`https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/chain_files/`)
 
-For both raw and filtered calls, `event_bp` is:
+#### AGPv2 sources (Rodgers-Melnick and European)
 
-- `floor((left_coordinate + right_coordinate) / 2)`
-
-Scripts used:
-
-- `scripts/extract_co_events.py`
-
-### HMM-Based Crossover Workflow
-
-The preferred crossover-calling workflow is the HMM pipeline, which uses the same workbook and sheet as above but applies per-population marker cleaning and chromosome-wise decoding before interval calling.
-
-Main outputs:
-
-- `results/hmm_cleaned_matrices/`
-- `results/hmm_co_events_long.tsv`
-- `results/hmm_qc_summary.tsv`
-- `results/marey_map_hmm_co_events.png`
-
-#### Marker Cleaning
-
-Cleaning was done separately within each `map`:
-
-1. Remove rows with missing required fields, `chr_phy == 0`, or `raw_data` length `<= 6`.
-2. Deduplicate markers sharing the same `(chromosome, coordinate)` by keeping the row with the highest informative genotype count.
-3. Remove individuals with missingness greater than `0.30`.
-4. Remove markers with missingness greater than `0.20`.
-5. Remove markers with informative `A` fraction outside `0.10` to `0.90`.
-6. Remove markers with isolated-flip rate greater than `0.12`.
-
-This run retained:
-
-- `23` cleaned population matrices
-- `2,209` individuals
-
-#### HMM Model
-
-The HMM was run separately for each population, chromosome, and individual.
-
-States:
-
-- `A`
-- `B`
-
-Observations:
-
-- `A`
-- `B`
-- missing/noninformative
-
-Emission probabilities:
-
-- match probability `0.98`
-- mismatch probability `0.02`
-- missing probability `0.50` under either state
-
-Distance-aware transition settings:
-
-- base rate per bp `1e-8`
-- minimum transition probability `1e-6`
-- maximum transition probability `0.05`
-
-The hidden path was decoded with Viterbi.
-
-#### HMM CO Interval Calling
-
-A crossover interval was called whenever the decoded state changed between adjacent markers on the same chromosome. Each event records:
-
-- `sample_id`
-- `map`
-- `chromosome`
-- `event_index`
-- `event_bp`
-- `left_coordinate`
-- `right_coordinate`
-- `left_snp`
-- `right_snp`
-- `left_state`
-- `right_state`
-
-`event_bp` is again the midpoint:
-
-- `floor((left_coordinate + right_coordinate) / 2)`
-
-After HMM calling, adjacent events within `2,000,000` bp for the same individual and chromosome were removed.
-
-Run summary for the recorded execution:
-
-- `32,439` HMM-based CO intervals
-- `23` cleaned population matrices
-- `2,209` retained individuals with HMM calls
-
-Scripts used:
-
-- `scripts/hmm_co_pipeline.py`
-- `scripts/plot_marey_map.py`
-
-### Lift-Over To B73 v5
-
-Several workflows in this repository rely on lifting marker or interval coordinates from AGPv2 to B73 v5.
-
-#### Chain File Construction
-
-Two chain files are used for coordinate lift-over:
-
-- `v2v5.chain` — derived from an AnchorWave whole-genome alignment (see below)
-- `v4v5.chain` — downloaded from MaizeGDB: `https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/chain_files/`
-
-The v2-to-v5 chain file was derived from an AnchorWave whole-genome alignment.
-
-Build the submodule:
+Convert to BED:
 
 ```bash
-git clone --recurse-submodules <repo-url>
-cd AnchorWave
-cmake ./
-make -j
-cd ..
+cat RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt RodgersMelnick2015PNAS_usnamImputedXOsegments.txt | \
+  grep -v 'het' | grep -v 'Family' | \
+  tee >(cut -f 1,5,6 > left.txt) | cut -f 3 > right.txt
+
+paste left.txt right.txt | sed -e 's/\r//g' | \
+  awk 'BEGIN{OFS="\t"} {print $0, sprintf("RMv2_%06d", NR)}' > RodgersMelnickv2.bed
+
+awk 'BEGIN{FS=OFS="\t"} NR > 1 {
+  print $3, $6, $7, $1, sprintf("EUROv2_%06d", NR-1)
+}' hmm_co_events_long.tsv > eurov2.bed
 ```
 
-Run the alignment:
+Split to endpoints, lift, and reconstruct:
 
 ```bash
-scripts/align_with_anchorwave.sh \
-  --gff v5.gff3.gz \
-  --ref v5.fa.gz \
-  --query v2.fa.gz \
-  --threads 16 \
-  --outdir anchorwave_out
+cat RodgersMelnickv2.bed eurov2.bed | awk 'BEGIN{OFS="\t"} {
+  x=$2; y=$3-1
+  $2=x; $3=x+1; print
+  $2=y; $3=y+1; print
+}' > markersv2.bed
+
+CrossMap bed v2v5.chain markersv2.bed markersv5.bed
+
+awk '
+{
+  id=$5; chrkey=$1 FS id
+  total[id]++; perchr[chrkey]++
+  if (!(chrkey in mn) || $2 < mn[chrkey]) mn[chrkey]=$2
+  if (!(chrkey in mx) || $3 > mx[chrkey]) mx[chrkey]=$3
+}
+END {
+  for (ck in perchr) {
+    split(ck, a, FS); chr=a[1]; id=a[2]
+    if (total[id]==2 && perchr[ck]==2)
+      print chr, mn[ck], mx[ck], id
+  }
+}' OFS='\t' markersv5.bed | sort -k1,1 -k2,2n > jri_rm_euro_v5.bed
 ```
 
-Convert the resulting MAF to a UCSC chain:
-
-```bash
-maf-convert chain anchorwave_out/alignment.maf > v2v5.chain
-```
-
-Requirements:
-
-- `last`
-- `minimap2`
-- `AnchorWave`
-
-Primary alignment script:
-
-- `scripts/align_with_anchorwave.sh`
-
-#### Rodgers-Melnick, European, And Samayoa Interval Inputs
-
-The repository combines multiple crossover interval sources:
-
-- Rodgers-Melnick NAM intervals (AGPv2)
-- European workbook-derived events (AGPv2)
-- Samayoa landrace and teosinte intervals (AGPv4)
-
-Rodgers-Melnick source:
-
-- Rodgers-Melnick E, Bradbury PJ, Elshire RJ, Glaubitz JC, Acharya CB, Mitchell SE, Li C, Li Y, Buckler ES. 2015. *Recombination in diverse maize is stable, predictable, and associated with genetic load*. PNAS.
-- downloaded interval tables:
-  `RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt`
-  and
-  `RodgersMelnick2015PNAS_usnamImputedXOsegments.txt`
-- described in the earlier repository notes as downloaded from Panzea
-
-European source:
-
-- Bauer E, Falque M, Walter H, et al. 2013. *Intraspecific variation of recombination rate in maize*. Genome Biology. `https://doi.org/10.1186/gb-2013-14-9-r103`
-- workbook: `/Users/jeffreyross-ibarra/Downloads/gb-2013-14-9-r103-S4.xlsx`
-- sheet: `Table_S3`
-- columns used for crossover extraction:
-  `map`, `SNP_name`, `chr_phy`, `coordinate`, and `raw_data`
-
-Samayoa landrace and teosinte source:
-
-- Samayoa LF, Olukolu BA, Yang CJ, et al. 2021. *Domestication reshaped the genetic basis of inbreeding depression in a maize landrace compared to its wild relative, teosinte*. PLoS Genetics 17(12): e1009797. `https://doi.org/10.1371/journal.pgen.1009797`
-- local interval tables (AGPv4 coordinates):
-  `xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt` — crossover intervals for combined LR13 and LR14 landrace parents
-  and
-  `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_AGPv4_filtered0210.txt` — crossover intervals for teosinte (ZeaGBSv27, C2 curated, depth-filtered)
-- columns: `taxon`, `chr`, `start`, `end`
-- lifted v5 BED outputs (chromosomes 1–10 only):
-  `xo_Combined_LR13_LR14_parents2_v5.bed` (136,709 intervals; ~99.7% retention)
-  and
-  `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed` (127,149 intervals; ~99.7% retention)
-
-Lift-over from AGPv4 to B73 v5 used `v4v5.chain` and followed the same endpoint-split approach as the v2→v5 pipeline: each interval was split into two single-base endpoint markers, lifted with CrossMap, then reconstructed by taking the minimum lifted start and maximum lifted end for pairs where both endpoints mapped to the same chromosome. Intervals where either endpoint failed to lift, or where endpoints landed on different chromosomes, were discarded. Contigs (non-integer chromosome names) were excluded from the final output.
+#### AGPv4 sources (Samayoa)
 
 ```bash
 awk 'NR>1 {
-  id = $2"_"$3"_"$4"_"$1
+  id=$2"_"$3"_"$4"_"$1
   print $2, $3, $3+1, id
   print $2, $4-1, $4, id
 }' OFS='\t' xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt > lr_markers_v4.bed
@@ -267,365 +124,156 @@ CrossMap bed v4v5.chain lr_markers_v4.bed lr_markers_v5.bed
 
 awk '
 {
-  id = $4; chrkey = $1 FS id
+  id=$4; chrkey=$1 FS id
   total[id]++; perchr[chrkey]++
-  if (!(chrkey in min_start) || $2 < min_start[chrkey]) min_start[chrkey] = $2
-  if (!(chrkey in max_end)   || $3 > max_end[chrkey])   max_end[chrkey]   = $3
+  if (!(chrkey in mn) || $2 < mn[chrkey]) mn[chrkey]=$2
+  if (!(chrkey in mx) || $3 > mx[chrkey]) mx[chrkey]=$3
 }
 END {
-  for (chrkey in perchr) {
-    split(chrkey, a, FS); chr = a[1]; id = a[2]
-    if (total[id] == 2 && perchr[chrkey] == 2) {
-      n = split(id, b, "_"); taxon = b[4]
-      for (i=5; i<=n; i++) taxon = taxon "_" b[i]
-      if (chr+0 >= 1 && chr+0 <= 10) print chr, min_start[chrkey], max_end[chrkey], taxon
+  for (ck in perchr) {
+    split(ck, a, FS); chr=a[1]; id=a[2]
+    if (total[id]==2 && perchr[ck]==2) {
+      n=split(id,b,"_"); taxon=b[4]
+      for(i=5;i<=n;i++) taxon=taxon"_"b[i]
+      if (chr+0>=1 && chr+0<=10) print chr, mn[ck], mx[ck], taxon
     }
   }
-}
-' OFS='\t' lr_markers_v5.bed | sort -k1,1n -k2,2n > xo_Combined_LR13_LR14_parents2_v5.bed
+}' OFS='\t' lr_markers_v5.bed | sort -k1,1n -k2,2n \
+  > xo_Combined_LR13_LR14_parents2_v5.bed
 ```
 
 Apply the same commands substituting the teosinte file to produce `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed`.
 
-Example conversions to v2 BED:
+### Step 3 — Building `jri_v5.bed`
+
+Concatenate all four lifted sources and sort:
 
 ```bash
-cat RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt RodgersMelnick2015PNAS_usnamImputedXOsegments.txt | \
-  grep -v 'het' | grep -v 'Family' | \
-  tee >(cut -f 1,5,6 > left.txt) | cut -f 3 > right.txt
-
-paste left.txt right.txt | \
-  sed -e 's/\r//g' | \
-  awk 'BEGIN{OFS="\t"} {print $0, sprintf("RMv2_%06d", NR)}' \
-  > RodgersMelnickv2.bed
+cat jri_rm_euro_v5.bed \
+    xo_Combined_LR13_LR14_parents2_v5.bed \
+    xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed \
+  | sort -k1,1V -k2,2n > jri_v5.bed
 ```
 
-```bash
-awk 'BEGIN{FS=OFS="\t"} NR > 1 {
-  print $3, $6, $7, $1, sprintf("EUROv2_%06d", NR-1)
-}' hmm_co_events_long.tsv > eurov2.bed
-```
+`jri_v5.bed` contains 373,747 crossover intervals across four sources:
 
-The interval endpoints were split into marker positions before lift-over:
+| Source | Intervals | Retention |
+|--------|-----------|-----------|
+| Rodgers-Melnick NAM | 88,863 | — |
+| European HMM | 21,026 | — |
+| Samayoa LR13/LR14 landrace | 136,709 | ~99.7% |
+| Samayoa teosinte | 127,149 | ~99.7% |
 
-```bash
-cat RodgersMelnickv2.bed eurov2.bed | awk 'BEGIN{OFS="\t"} {
-  x = $2
-  y = $3 - 1
+### Step 4 — Deriving `finemap_v5.bed`
 
-  $2 = x
-  $3 = x + 1
-  print
+`finemap_v5.bed` is a non-overlapping BED6 track representing the crossover density in `jri_v5.bed` as a piecewise-constant recombination rate, scaled so that each chromosome's total genetic length matches the Ogut map.
 
-  $2 = y
-  $3 = y + 1
-  print
-}' > markersv2.bed
-```
+**Method:**
 
-Lift to v5:
+1. Assign each interval in `jri_v5.bed` a per-bp weight of `1 / (end − start)`.
+2. Use a sweep-line algorithm to sum weights across all overlapping intervals at each position; merge consecutive positions with equal summed weight into non-overlapping segments.
+3. For each chromosome, normalize weights so the interval-weighted sum equals the Ogut chromosome genetic length in cM.
+4. Walk segments in coordinate order, accumulating `cM_start` and `cM_end`; report `cM_per_Mb = (cM_end − cM_start) / (end − start) × 10⁶`.
 
-```bash
-CrossMap bed v2v5.chain markersv2.bed markersv5.bed
-```
+**Output columns:** `chrom`, `start`, `end`, `cM_start`, `cM_end`, `cM_per_Mb`
 
-#### `jri_v5.bed` Creation
+**Result:** 214,104 segments; genome-wide average 0.694 cM/Mb across covered sequence.
 
-`jri_v5.bed` is the combined lifted interval set derived from the Rodgers-Melnick, European, and Samayoa inputs above. It is not a raw concatenation of the original interval tables.
+**Ogut chromosome lengths used for scaling:**
 
-Construction steps:
+| Chr | cM | Chr | cM |
+|-----|----|-----|----|
+| Chr1 | 210.4 | Chr6 | 111.4 |
+| Chr2 | 161.2 | Chr7 | 138.4 |
+| Chr3 | 163.4 | Chr8 | 137.4 |
+| Chr4 | 151.8 | Chr9 | 131.2 |
+| Chr5 | 157.0 | Chr10 | 113.0 |
 
-1. Build `RodgersMelnickv2.bed` and `eurov2.bed` from their AGPv2 sources.
-2. Concatenate those v2 interval BEDs.
-3. Split each interval into two single-base endpoint markers to create `markersv2.bed`.
-4. Lift those endpoints to v5 with CrossMap, producing `markersv5.bed`.
-5. Rebuild intervals from the lifted endpoint pairs.
-6. Lift the Samayoa AGPv4 files to v5 using `v4v5.chain` (same endpoint-split approach) to produce `xo_Combined_LR13_LR14_parents2_v5.bed` and `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed`.
-7. Concatenate all v5 interval sets and sort by chromosome and start position.
-
-During interval rebuilding:
-
-- keep only IDs seen exactly twice total after lift-over
-- drop IDs seen once or more than twice
-- drop IDs whose two lifted endpoints land on different chromosomes
-- for retained IDs, emit one interval using the minimum lifted start and maximum lifted end
-
-The earlier repository notes recorded the interval-rebuild step as:
-
-```bash
-awk '
-{
-  id = $5
-  chrkey = $1 FS id
-
-  total[id]++
-  perchr[chrkey]++
-
-  if (!(chrkey in min_start) || $2 < min_start[chrkey]) min_start[chrkey] = $2
-  if (!(chrkey in max_end)   || $3 > max_end[chrkey])   max_end[chrkey]   = $3
-}
-END {
-  for (chrkey in perchr) {
-    split(chrkey, a, FS)
-    chr = a[1]
-    id  = a[2]
-
-    if (total[id] == 2 && perchr[chrkey] == 2) {
-      print chr, min_start[chrkey], max_end[chrkey], indiv, id
-    }
-  }
-}
-' OFS='\t' markersv5.bed | sort -k1,1 -k2,2n > jri_v5.bed
-```
-
-This produces a v5 BED of lifted crossover intervals with one row per successfully reconstructed interval.
-
-#### Ogut Marker Map
-
-The Ogut map originates from:
-
-- Ogut F, Bian Y, Bradbury PJ, Holland JB. 2015. *Joint-multiple family linkage analysis predicts within-family variation better than single-family analysis of the maize nested association mapping population*. Heredity.
-
-Source files:
-
-- `ogut_fifthcM_map_agpv2.csv`
-
-Lift-over:
-
-```bash
-CrossMap bed v2v5.chain ogut_fifthcM_map_agpv2.bed ogut_v5.bed
-```
-
-Manual post-lift cM adjustments were applied to preserve chromosome-wise monotonicity:
-
-- on `Chr3`, `M2179` and `M2180` had their cM values swapped
-- on `Chr7`, markers `M5158` through `M5171` had their cM values reversed across the block
-
-#### `finemap_v5.bed` Derivation
-
-`finemap_v5.bed` is a non-overlapping B73 v5 BED6 track derived from `jri_v5.bed` and scaled to chromosome-level genetic lengths from the Ogut map. It represents the interval coverage as a piecewise-constant recombination map, with cumulative genetic positions and a constant `cM_per_Mb` rate within each output segment.
-
-Inputs:
-
-- `jri_v5.bed`
-- `ogut_fifthcM_map_agpv2.csv`
-
-Method:
-
-1. For each row in `jri_v5.bed`, compute a per-bp interval weight of `1 / (end - start)`.
-2. Treat each interval weight as uniformly distributed across the full physical interval.
-3. Sum those weights at every covered bp, then merge consecutive bp with identical summed values to create a non-overlapping per-bp weight track.
-4. For each chromosome in `ogut_fifthcM_map_agpv2.csv`, calculate the chromosome genetic length as `max(cM) - min(cM)`.
-5. For each chromosome in the merged per-bp track, compute the total interval-weighted mass as `sum((end - start) * per_bp_weight)`.
-6. Normalize each chromosome's per-bp weights so that the interval-weighted sum on that chromosome is `1`, then multiply by that chromosome's Ogut genetic length in cM to obtain a chromosome-specific `cM_per_bp` track.
-7. Walk the non-overlapping segments in chromosome order and accumulate `cM_start` and `cM_end` for each segment as `previous_cM_end` and `cM_start + (end - start) * cM_per_bp`.
-8. Convert `cM_per_bp` to `cM_per_Mb` by multiplying by `1e6`.
-9. Write the final BED6 file as `chrom`, `start`, `end`, `cM_start`, `cM_end`, `cM_per_Mb`.
-
-Columns:
-
-- `chrom`
-- `start`
-- `end`
-- `cM_start`
-- `cM_end`
-- `cM_per_Mb`
-
-Validation and error handling:
-
-- Within each chromosome, `start`, `end`, `cM_start`, and `cM_end` should be strictly increasing in row order.
-- Each row must also satisfy `end > start` and `cM_end > cM_start`.
-- If a row has `cM_end == cM_start`, or a very small negative `cM_end - cM_start` consistent with floating-point error, treat it as a boundary tie and replace `cM_end` with `cM_start + 1e-6`.
-- After adjusting such a row, shift the next row's `cM_start` to the same corrected value when needed so chromosome-wise `cM` coordinates remain strictly increasing across rows.
-- Set `cM_per_Mb = 0` for any row that required this tie-breaking correction.
-- Any other non-increasing span, including larger `cM` reversals or any `bp` reversal, should be reported as an error range for manual review rather than silently corrected.
-
-Chromosome genetic lengths used for scaling:
-
-- `Chr1 210.4`
-- `Chr2 161.2`
-- `Chr3 163.4`
-- `Chr4 151.8`
-- `Chr5 157.0`
-- `Chr6 111.4`
-- `Chr7 138.4`
-- `Chr8 137.4`
-- `Chr9 131.2`
-- `Chr10 113.0`
-
-By construction, the last `cM_end` on each chromosome equals the target chromosome cM length, and `cM_per_Mb = ((cM_end - cM_start) / (end - start)) * 1e6`.
-
-This derivation is implemented in `scripts/build_finemap.py`, which also regenerates the per-chromosome HapMap files. Run it with:
+Script: `scripts/build_finemap.py` (also regenerates HapMap files)
 
 ```bash
 python scripts/build_finemap.py
 ```
 
-#### Per-Chromosome HapMap Exports
+### Step 5 — HapMap Exports
 
-The repository also includes per-chromosome HapMap-format recombination maps derived from `finemap_v5.bed` for use with `msprime.RateMap.read_hapmap()`.
+`data/hapmap/chr{1..10}.hapmap.tsv` — per-chromosome HapMap-format files derived from `finemap_v5.bed` for use with `msprime.RateMap.read_hapmap()`.
 
-Outputs:
+Format: `Chromosome`, `Position(bp)`, `Rate(cM/Mb)`, `Map(cM)`. One file per chromosome; terminal row rate set to 0 per `msprime` convention. Generated by `scripts/build_finemap.py`.
 
-- `data/hapmap/chr1.hapmap.tsv`
-- `data/hapmap/chr2.hapmap.tsv`
-- `data/hapmap/chr3.hapmap.tsv`
-- `data/hapmap/chr4.hapmap.tsv`
-- `data/hapmap/chr5.hapmap.tsv`
-- `data/hapmap/chr6.hapmap.tsv`
-- `data/hapmap/chr7.hapmap.tsv`
-- `data/hapmap/chr8.hapmap.tsv`
-- `data/hapmap/chr9.hapmap.tsv`
-- `data/hapmap/chr10.hapmap.tsv`
+## Analysis
 
-Format:
+### Marey Map: Ogut vs finemap_v5
 
-- header: `Chromosome`, `Position(bp)`, `Rate(cM/Mb)`, `Map(cM)`
-- one chromosome per file, because `msprime.RateMap.read_hapmap()` expects each file to contain a single contig
-- chromosome names normalized to `chr1` through `chr10`
+Compares the Ogut genetic map (AGPv2 markers lifted to v5 via CrossMap) against `finemap_v5.bed` across all ten chromosomes in a 2×5 grid. B73 centromere positions are shaded.
 
-Method:
-
-1. Split `finemap_v5.bed` by chromosome.
-2. Convert each BED segment boundary into HapMap breakpoint rows using `start -> cM_start` and `end -> cM_end`.
-3. Merge duplicate breakpoint positions only when the cumulative `Map(cM)` values agree.
-4. Add a leading `0 bp, 0 cM` row when the first BED segment does not start at `0`.
-5. Compute `Rate(cM/Mb)` for each row as the constant rate from that position to the next breakpoint.
-6. Append a final row at the full chromosome length from `data/v5.fa.gz.fai`; if `finemap_v5.bed` ends earlier, this terminal interval is padded with `0` recombination rate.
-7. Set the final HapMap row rate to `0`, matching the `msprime` HapMap parser expectation for the terminal position.
-
-
-## Simulation Data
-
-The repository includes simulated BED region sets with lengths sampled from the empirical length distribution of `jri_v5.bed`.
-
-Files:
-
-- `example1.bed`
-- `example2.bed`
-- `example3.bed`
-- `example4.bed`
-
-All coordinates are on B73 v5 chromosomes `chr1` through `chr10`.
-
-Sampling rules:
-
-- `example1.bed`: uniform genome-wide placement
-- `example2.bed`: enriched in strand-aware 5' gene flanks
-- `example3.bed`: enriched in internal gene-body segments after removing the first and last 5 kb
-- `example4.bed`: enriched in strand-aware 3' gene flanks
-
-Notes:
-
-- enrichment is defined by sampling an anchor point from the target annotation class and then placing the simulated interval uniformly around that point
-- gene annotations come from `v5.gff3`
-- chromosome lengths come from `data/v5.fa.gz.fai`
-
-## Plotting Code
-
-### `metaplot.py`
-
-`metaplot.py` builds a gene-centered metaplot from a GFF/GFF3 annotation and an input BED file.
-
-Behavior:
-
-- reads `gene` features from `--gff`
-- normalizes chromosome names
-- truncates flanks so they do not extend into neighboring genes
-- plots mean signal across windows
-- adds a standard-error ribbon
-- adds a lower panel showing contributing gene counts
-- does not explicitly exclude genes by length
-- reports chromosome-name normalization warnings to `stderr` when renaming occurs
-
-Signal modes:
-
-- default midpoint mode: each BED interval contributes at its midpoint
-- `--uniform`: distribute interval value across its full span
-
-BED input expectations:
-
-1. chromosome
-2. start
-3. end
-4. value optional
-
-If column 4 is missing or nonnumeric, value defaults to `1`.
-
-Basic usage:
-
-```bash
-python metaplot.py \
-  --gff v5.gff3 \
-  --input jri_small.bed \
-  --bin-size 100 \
-  --flanking-bp 1000 \
-  --body-bins 25
-```
-
-```bash
-python metaplot.py \
-  --gff v5.gff3 \
-  --input jri_small.bed \
-  --bin-size 100 \
-  --flanking-bp 1000 \
-  --body-bins 25 \
-  --uniform \
-  --output my_metaplot.pdf \
-  --no-show
-```
-
-Main arguments:
-
-- `--gff`
-- `--input`
-- `--bin-size`
-- `--flanking-bp`
-- `--body-bins`
-- `--uniform`
-- `--output`
-- `--title`
-- `--no-show`
-
-Default output:
-
-- `metaplot.pdf`
-
-Display behavior:
-
-- the plot is saved as a PDF
-- unless `--no-show` is used, the plot is also shown interactively
-
-### Ogut vs finemap_v5 Marey Map
-
-`scripts/plot_marey_comparison.py` produces a 2×5 Marey map comparing the Ogut genetic map (AGPv2 markers lifted to B73 v5) against `finemap_v5.bed` across all ten chromosomes.
-
+Script: `scripts/plot_marey_comparison.py`  
 Output: `results/marey_ogut_vs_finemap.png`
-
-![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)
-
-Run with:
 
 ```bash
 python scripts/plot_marey_comparison.py
 ```
 
-### Marey-Style Plotting
+### Recombination Rate Around Genes
 
-The HMM workflow also produces a Marey-style recombination summary plot with:
+`scripts/metaplot.py` computes mean signal in bins across gene bodies. To plot recombination rate with 5 kb flanks and 500 bp windows at each gene end:
 
-- `scripts/plot_marey_map.py`
+```bash
+awk 'BEGIN{OFS="\t"} {print $1, $2, $3, $6}' data/finemap_v5.bed > finemap_rate.bed
 
-Behavior:
+python scripts/metaplot.py \
+  --gff data/v5.genes.gff3 \
+  --input finemap_rate.bed \
+  --bin-size 100 \
+  --flanking-bp 5000 \
+  --body-bins 5 \
+  --uniform \
+  --title "Recombination rate (cM/Mb) around genes" \
+  --output results/metaplot_recombination.pdf \
+  --no-show
+```
 
-- accepts optional input and output paths as positional arguments
-- defaults to reading `results/co_events_long.tsv`
-- defaults to writing `results/marey_map_co_events.png`
-- writes a PNG figure with `fig.savefig(...)`
-- prints `Wrote <output_path>` to standard output
+Uses 38,418 protein-coding genes on chr1–chr10. With `--bin-size 100` and `--body-bins 5`, each gene-end window is exactly 500 bp; flanks extend 5 kb from TSS and TTS. The `--uniform` flag distributes each segment's rate across its full physical span rather than assigning it to a midpoint.
+
+Key `metaplot.py` arguments:
+
+| Argument | Description |
+|----------|-------------|
+| `--gff` | Gene annotation GFF/GFF3 |
+| `--input` | Signal BED (column 4 = value; defaults to 1 if absent) |
+| `--bin-size` | Bin width in bp; must divide `--flanking-bp` |
+| `--flanking-bp` | Flank length on each side of TSS/TTS |
+| `--body-bins` | Bins shown from each gene end inside the body |
+| `--uniform` | Spread interval value across its full span (use for rate data) |
+| `--output` | Output PDF (default: `metaplot.pdf`) |
+| `--no-show` | Suppress interactive display |
+
+### Recombination Rate vs Gene Density
+
+Plots gene density (genes/Mb) against weighted-average cM/Mb across 100 kb windows genome-wide, with binned medians overlaid.
+
+Script: `scripts/plot_rate_vs_gene_density.py`  
+Output: `results/rate_vs_gene_density.png`
+
+```bash
+python scripts/plot_rate_vs_gene_density.py
+```
+
+## Simulation Regions
+
+Simulated BED region sets with interval lengths drawn from the empirical distribution of `jri_v5.bed`, placed on B73 v5 chromosomes chr1–chr10. Used for comparison with observed crossover distributions.
+
+| File | Placement |
+|------|-----------|
+| `data/example1.bed` | Uniform genome-wide |
+| `data/example2.bed` | Enriched in strand-aware 5′ gene flanks |
+| `data/example3.bed` | Enriched in gene bodies (excluding first and last 5 kb) |
+| `data/example4.bed` | Enriched in strand-aware 3′ gene flanks |
+
+Script: `scripts/simulate_example_regions.py`
 
 ## Notes
 
-- The HMM-based workflow should be treated as the preferred source of final crossover intervals.
-- The older switch-based European tables remain useful as an exploratory and provenance-preserving intermediate.
-- Interval locations remain bounded by marker spacing, so all reported crossover positions are interval midpoints rather than exact breakpoints.
+- Crossover positions are interval midpoints, not exact breakpoints; precision is bounded by marker spacing in the source data.
+- Regions with no crossover coverage in `jri_v5.bed` (primarily pericentromeric heterochromatin) carry no rate in `finemap_v5.bed` and are excluded from genome-wide averages.
+- The Ogut map sets total cM per chromosome only; the within-chromosome rate distribution comes entirely from the crossover interval data.
