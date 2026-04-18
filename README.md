@@ -1,6 +1,9 @@
-# finemap
+# FineMap
 
 Builds a piecewise-constant recombination map (`finemap_v5.bed`) for maize on B73 v5 coordinates by combining crossover intervals from four published datasets, normalizing to Ogut chromosome-scale genetic lengths, and exporting per-chromosome HapMap files for use with `msprime`.
+
+If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map of maize. [![DOI](https://zenodo.org/badge/1197435858.svg)](https://doi.org/10.5281/zenodo.19639077)
+
 
 ## Input Data
 
