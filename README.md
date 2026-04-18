@@ -343,3 +343,7 @@ python scripts/plot_example_metaplots.py
 - Each crossover is localized to an interval between flanking markers; the exact breakpoint is unknown and precision is bounded by marker spacing in the source data.
 - Regions with no crossover coverage in `jri_v5.bed` (primarily pericentromeric heterochromatin) carry no rate in `finemap_v5.bed` and are excluded from genome-wide averages.
 - The Ogut map sets total cM per chromosome only; the within-chromosome rate distribution comes entirely from the crossover interval data.
+
+## Acknowledgements
+
+I'd like to thank Wojtek Pawlowski, Quinn Johnson and other members of the Pawlowski lab for helpful discussion, sharing data, and code. Nate Pope, James Holland, and Peter Bradbury all provided helpful advice and insight as well.
