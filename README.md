@@ -172,6 +172,11 @@ Several workflows in this repository rely on lifting marker or interval coordina
 
 #### Chain File Construction
 
+Two chain files are used for coordinate lift-over:
+
+- `v2v5.chain` — derived from an AnchorWave whole-genome alignment (see below)
+- `v4v5.chain` — downloaded from MaizeGDB: `https://download.maizegdb.org/Zm-B73-REFERENCE-NAM-5.0/chain_files/`
+
 The v2-to-v5 chain file was derived from an AnchorWave whole-genome alignment.
 
 Build the submodule:
@@ -211,13 +216,13 @@ Primary alignment script:
 
 - `scripts/align_with_anchorwave.sh`
 
-#### Rodgers-Melnick, Penny, And European Interval Inputs
+#### Rodgers-Melnick, European, And Samayoa Interval Inputs
 
-The repository combines multiple v2-era crossover interval sources before lift-over:
+The repository combines multiple crossover interval sources:
 
-- Rodgers-Melnick NAM intervals
-- Penny interval data
-- European workbook-derived events
+- Rodgers-Melnick NAM intervals (AGPv2)
+- European workbook-derived events (AGPv2)
+- Samayoa landrace and teosinte intervals (AGPv4)
 
 Rodgers-Melnick source:
 
@@ -228,14 +233,6 @@ Rodgers-Melnick source:
   `RodgersMelnick2015PNAS_usnamImputedXOsegments.txt`
 - described in the earlier repository notes as downloaded from Panzea
 
-Penny source:
-
-- Kianian PMA, Wang M, Simons K, et al. 2018. *High-resolution crossover mapping reveals similarities and differences of male and female recombination in maize*. Nature Communications. `https://doi.org/10.1038/s41467-018-04562-5`
-- local interval tables:
-  `penny_co_v2_male.txt`
-  and
-  `penny_co_v2_female.txt`
-
 European source:
 
 - Bauer E, Falque M, Walter H, et al. 2013. *Intraspecific variation of recombination rate in maize*. Genome Biology. `https://doi.org/10.1186/gb-2013-14-9-r103`
@@ -243,6 +240,52 @@ European source:
 - sheet: `Table_S3`
 - columns used for crossover extraction:
   `map`, `SNP_name`, `chr_phy`, `coordinate`, and `raw_data`
+
+Samayoa landrace and teosinte source:
+
+- Samayoa LF, Olukolu BA, Yang CJ, et al. 2021. *Domestication reshaped the genetic basis of inbreeding depression in a maize landrace compared to its wild relative, teosinte*. PLoS Genetics 17(12): e1009797. `https://doi.org/10.1371/journal.pgen.1009797`
+- local interval tables (AGPv4 coordinates):
+  `xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt` — crossover intervals for combined LR13 and LR14 landrace parents
+  and
+  `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_AGPv4_filtered0210.txt` — crossover intervals for teosinte (ZeaGBSv27, C2 curated, depth-filtered)
+- columns: `taxon`, `chr`, `start`, `end`
+- lifted v5 BED outputs (chromosomes 1–10 only):
+  `xo_Combined_LR13_LR14_parents2_v5.bed` (136,709 intervals; ~99.7% retention)
+  and
+  `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed` (127,149 intervals; ~99.7% retention)
+
+Lift-over from AGPv4 to B73 v5 used `v4v5.chain` and followed the same endpoint-split approach as the v2→v5 pipeline: each interval was split into two single-base endpoint markers, lifted with CrossMap, then reconstructed by taking the minimum lifted start and maximum lifted end for pairs where both endpoints mapped to the same chromosome. Intervals where either endpoint failed to lift, or where endpoints landed on different chromosomes, were discarded. Contigs (non-integer chromosome names) were excluded from the final output.
+
+```bash
+awk 'NR>1 {
+  id = $2"_"$3"_"$4"_"$1
+  print $2, $3, $3+1, id
+  print $2, $4-1, $4, id
+}' OFS='\t' xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt > lr_markers_v4.bed
+
+CrossMap bed v4v5.chain lr_markers_v4.bed lr_markers_v5.bed
+
+awk '
+{
+  id = $4; chrkey = $1 FS id
+  total[id]++; perchr[chrkey]++
+  if (!(chrkey in min_start) || $2 < min_start[chrkey]) min_start[chrkey] = $2
+  if (!(chrkey in max_end)   || $3 > max_end[chrkey])   max_end[chrkey]   = $3
+}
+END {
+  for (chrkey in perchr) {
+    split(chrkey, a, FS); chr = a[1]; id = a[2]
+    if (total[id] == 2 && perchr[chrkey] == 2) {
+      n = split(id, b, "_"); taxon = b[4]
+      for (i=5; i<=n; i++) taxon = taxon "_" b[i]
+      if (chr+0 >= 1 && chr+0 <= 10) print chr, min_start[chrkey], max_end[chrkey], taxon
+    }
+  }
+}
+' OFS='\t' lr_markers_v5.bed | sort -k1,1n -k2,2n > xo_Combined_LR13_LR14_parents2_v5.bed
+```
+
+Apply the same commands substituting the teosinte file to produce `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed`.
 
 Example conversions to v2 BED:
 
@@ -258,14 +301,6 @@ paste left.txt right.txt | \
 ```
 
 ```bash
-cat penny_co_v2_male.txt penny_co_v2_female.txt | \
-  grep -v '^chr[[:space:]]' | \
-  sed -e 's/\r//g' | \
-  awk 'BEGIN{FS=OFS="\t"} {print $1, $2, $3, $7, sprintf("Pennyv2_%06d", NR)}' \
-  > Pennyv2.bed
-```
-
-```bash
 awk 'BEGIN{FS=OFS="\t"} NR > 1 {
   print $3, $6, $7, $1, sprintf("EUROv2_%06d", NR-1)
 }' hmm_co_events_long.tsv > eurov2.bed
@@ -274,7 +309,7 @@ awk 'BEGIN{FS=OFS="\t"} NR > 1 {
 The interval endpoints were split into marker positions before lift-over:
 
 ```bash
-cat RodgersMelnickv2.bed eurov2.bed Pennyv2.bed | awk 'BEGIN{OFS="\t"} {
+cat RodgersMelnickv2.bed eurov2.bed | awk 'BEGIN{OFS="\t"} {
   x = $2
   y = $3 - 1
 
@@ -296,15 +331,17 @@ CrossMap bed v2v5.chain markersv2.bed markersv5.bed
 
 #### `jri_v5.bed` Creation
 
-`jri_v5.bed` is the combined lifted interval set derived from the Rodgers-Melnick, Penny, and European inputs above. It is not a raw concatenation of the original interval tables.
+`jri_v5.bed` is the combined lifted interval set derived from the Rodgers-Melnick, European, and Samayoa inputs above. It is not a raw concatenation of the original interval tables.
 
 Construction steps:
 
-1. Build `RodgersMelnickv2.bed`, `Pennyv2.bed`, and `eurov2.bed`.
+1. Build `RodgersMelnickv2.bed` and `eurov2.bed` from their AGPv2 sources.
 2. Concatenate those v2 interval BEDs.
 3. Split each interval into two single-base endpoint markers to create `markersv2.bed`.
 4. Lift those endpoints to v5 with CrossMap, producing `markersv5.bed`.
 5. Rebuild intervals from the lifted endpoint pairs.
+6. Lift the Samayoa AGPv4 files to v5 using `v4v5.chain` (same endpoint-split approach) to produce `xo_Combined_LR13_LR14_parents2_v5.bed` and `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed`.
+7. Concatenate all v5 interval sets and sort by chromosome and start position.
 
 During interval rebuilding:
 
@@ -417,6 +454,12 @@ Chromosome genetic lengths used for scaling:
 - `Chr10 113.0`
 
 By construction, the last `cM_end` on each chromosome equals the target chromosome cM length, and `cM_per_Mb = ((cM_end - cM_start) / (end - start)) * 1e6`.
+
+This derivation is implemented in `scripts/build_finemap.py`, which also regenerates the per-chromosome HapMap files. Run it with:
+
+```bash
+python scripts/build_finemap.py
+```
 
 #### Per-Chromosome HapMap Exports
 
@@ -552,6 +595,20 @@ Display behavior:
 
 - the plot is saved as a PDF
 - unless `--no-show` is used, the plot is also shown interactively
+
+### Ogut vs finemap_v5 Marey Map
+
+`scripts/plot_marey_comparison.py` produces a 2×5 Marey map comparing the Ogut genetic map (AGPv2 markers lifted to B73 v5) against `finemap_v5.bed` across all ten chromosomes.
+
+Output: `results/marey_ogut_vs_finemap.png`
+
+![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)
+
+Run with:
+
+```bash
+python scripts/plot_marey_comparison.py
+```
 
 ### Marey-Style Plotting
 
