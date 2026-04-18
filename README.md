@@ -9,7 +9,6 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
 
 ### Reference Files
 
-- `data/Zm-B73-REFERENCE-GRAMENE-4.0.fa.gz` — B73 AGPv4 reference, indexed with `samtools faidx`
 - `data/v5.fa.gz.fai` — B73 v5 chromosome lengths
 - `data/v5.genes.gff3` — B73 v5 protein-coding gene annotations
 - `data/NAM_centromere_coords-cenH3.csv` — B73 centromere coordinates (CenH3-based)
