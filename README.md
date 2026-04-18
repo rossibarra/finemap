@@ -274,6 +274,6 @@ Script: `scripts/simulate_example_regions.py`
 
 ## Notes
 
-- Crossover positions are interval midpoints, not exact breakpoints; precision is bounded by marker spacing in the source data.
+- Each crossover is localized to an interval between flanking markers; the exact breakpoint is unknown and precision is bounded by marker spacing in the source data.
 - Regions with no crossover coverage in `jri_v5.bed` (primarily pericentromeric heterochromatin) carry no rate in `finemap_v5.bed` and are excluded from genome-wide averages.
 - The Ogut map sets total cM per chromosome only; the within-chromosome rate distribution comes entirely from the crossover interval data.
