@@ -4,6 +4,25 @@ Builds a piecewise-constant recombination map (`finemap_v5.bed`) for maize on B7
 
 If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map of maize. [![DOI](https://zenodo.org/badge/1197435858.svg)](https://doi.org/10.5281/zenodo.19639077)
 
+## Table of Contents
+
+- [Input Data](#input-data)
+  - [Reference Files](#reference-files)
+  - [Crossover Interval Sources](#crossover-interval-sources)
+  - [Genetic Map](#genetic-map)
+- [Pipeline](#pipeline)
+  - [Step 1 — European HMM Crossover Calling](#step-1--european-hmm-crossover-calling)
+  - [Step 2 — Lift-Over To B73 v5](#step-2--lift-over-to-b73-v5)
+  - [Step 3 — Building jri_v5.bed](#step-3--building-jri_v5bed)
+  - [Step 4 — Deriving finemap_v5.bed](#step-4--deriving-finemap_v5bed)
+  - [Step 5 — HapMap Exports](#step-5--hapmap-exports)
+- [Analysis](#analysis)
+  - [Marey Map: Ogut vs finemap_v5](#marey-map-ogut-vs-finemap_v5)
+  - [Recombination Rate Around Genes](#recombination-rate-around-genes)
+  - [Recombination Rate vs Gene Density](#recombination-rate-vs-gene-density)
+  - [Gene ± 1 kb Coverage: Physical vs Genetic](#gene--1-kb-coverage-physical-vs-genetic)
+- [Simulation Regions](#simulation-regions)
+- [Notes](#notes)
 
 ## Input Data
 
@@ -270,6 +289,33 @@ python scripts/plot_rate_vs_gene_density.py
 ```
 
 ![Recombination rate vs gene density](results/rate_vs_gene_density.png)
+
+### Gene ± 1 kb Coverage: Physical vs Genetic
+
+For each chromosome, computes the fraction of physical bp and fraction of total cM that fall within 1 kb of any gene body (gene ± 1 kb intervals merged). Recombination is consistently enriched near genes relative to their physical footprint.
+
+Script: `scripts/plot_gene_cM_coverage.py` (accepts `--flank` to change window size; default 1000 bp)
+
+```bash
+python scripts/plot_gene_cM_coverage.py
+```
+
+![Gene ± 1 kb coverage: physical vs genetic](results/gene_cM_coverage.png)
+
+| Chr | % bp (±100 bp) | % bp (±1 kb) | % cM (±100 bp) | % cM (±1 kb) |
+|-----|---------------|--------------|----------------|--------------|
+| 1   | 9.0 | 11.8 | 13.2 | 17.4 |
+| 2   | 8.8 | 11.7 | 16.1 | 21.4 |
+| 3   | 8.3 | 10.8 | 14.6 | 19.5 |
+| 4   | 7.3 |  9.7 | 12.8 | 17.2 |
+| 5   | 9.1 | 11.9 | 17.7 | 23.6 |
+| 6   | 8.2 | 11.0 | 13.7 | 18.4 |
+| 7   | 7.5 | 10.0 | 14.7 | 19.6 |
+| 8   | 9.2 | 12.0 | 15.4 | 20.5 |
+| 9   | 8.1 | 10.9 | 14.4 | 19.5 |
+| 10  | 8.8 | 11.4 | 16.9 | 22.5 |
+
+Shrinking the flank from ±1 kb to ±100 bp reduces %bp by ~2–3 points and %cM by ~4–5 points, but the cM/bp enrichment ratio (~1.5–1.9×) is stable across both windows, suggesting elevated recombination near genes is distributed broadly within the 1 kb flanks rather than concentrated at gene edges.
 
 ## Simulation Regions
 
