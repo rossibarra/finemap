@@ -277,6 +277,8 @@ python scripts/metaplot.py \
 
 Uses 38,418 protein-coding genes on chr1–chr10. With `--bin-size 100` and `--body-bins 5`, each gene-end window is exactly 500 bp; flanks extend 5 kb from TSS and TTS. The `--uniform` flag distributes each segment's rate across its full physical span rather than assigning it to a midpoint.
 
+The gene-body panel is built from whole `--bin-size` windows taken inward from each gene end rather than from a length-normalized rescaling of the full body. For genes shorter than `2 * --body-bins * --bin-size`, the script keeps as many complete bins as fit from the TSS side and from the TTS side and leaves the central gap empty; if the available number of whole bins is odd, the middle bin is dropped.
+
 Key `metaplot.py` arguments:
 
 | Argument | Description |

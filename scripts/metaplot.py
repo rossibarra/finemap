@@ -3,6 +3,9 @@
 import argparse
 import sys
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -208,7 +211,7 @@ def uniform_sum(chrom_signal, window_start, window_end):
 def add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts):
     chrom_signal = signal_dict.get(chrom)
     if chrom_signal is None:
-        value = 0.0
+        return
     else:
         if ARGS.uniform:
             value = uniform_sum(chrom_signal, window_start, window_end)
