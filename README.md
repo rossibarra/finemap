@@ -4,6 +4,10 @@ Builds a piecewise-constant recombination map (`finemap_v5.bed`) for maize on B7
 
 If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map of maize. [![DOI](https://zenodo.org/badge/1197435858.svg)](https://doi.org/10.5281/zenodo.19639077)
 
+## Environment Notes
+
+`environment.yml` defines the base conda environment used in this repo. The current scripts shown below also require `pandas` (`scripts/build_finemap.py`, `scripts/metaplot.py`, plotting scripts), `openpyxl` (`scripts/hmm_co_pipeline.py`), and `CrossMap` for lift-over.
+
 ## Table of Contents
 
 - [Input Data](#input-data)
@@ -62,7 +66,9 @@ Ogut F et al. 2015. *Joint-multiple family linkage analysis predicts within-fami
 
 ### Step 1 — European HMM Crossover Calling
 
-European crossovers were called from the Bauer et al. SNP workbook (`gb-2013-14-9-r103-S4.xlsx`, sheet `Table_S3`) using an HMM pipeline. This produces the 21,026 European intervals that feed into `jri_v5.bed`.
+European crossovers were called from the Bauer et al. SNP workbook (`data/gb-2013-14-9-r103-S4.xlsx`, sheet `Table_S3`) using an HMM pipeline. This produces the 21,026 European intervals that feed into `data/jri_v5.bed`.
+
+The repo contains a copy of the workbook under `data/`, but the current script hardcodes `INPUT_XLSX` to `/Users/jeffreyross-ibarra/Downloads/gb-2013-14-9-r103-S4.xlsx`. Update that constant before rerunning the pipeline elsewhere.
 
 Script: `scripts/hmm_co_pipeline.py`
 
@@ -81,7 +87,13 @@ This run retained 23 cleaned population matrices and 2,209 individuals.
 
 Outputs: `results/hmm_cleaned_matrices/`, `results/hmm_co_events_long.tsv`, `results/hmm_qc_summary.tsv`
 
-A Marey map of the HMM intervals can be produced with `scripts/plot_marey_map.py` (reads `results/co_events_long.tsv`, writes `results/marey_map_co_events.png`).
+A Marey map of the HMM intervals can be produced with `scripts/plot_marey_map.py`. The script's default input path is currently stale, so pass the HMM output explicitly:
+
+```bash
+python scripts/plot_marey_map.py \
+  results/hmm_co_events_long.tsv \
+  results/marey_map_co_events.png
+```
 
 ### Step 2 — Lift-Over To B73 v5
 
@@ -97,7 +109,7 @@ All sources are lifted using CrossMap with an endpoint-split approach: each inte
 Convert to BED:
 
 ```bash
-cat RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt RodgersMelnick2015PNAS_usnamImputedXOsegments.txt | \
+cat data/RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt data/RodgersMelnick2015PNAS_usnamImputedXOsegments.txt | \
   grep -v 'het' | grep -v 'Family' | \
   tee >(cut -f 1,5,6 > left.txt) | cut -f 3 > right.txt
 
@@ -106,7 +118,7 @@ paste left.txt right.txt | sed -e 's/\r//g' | \
 
 awk 'BEGIN{FS=OFS="\t"} NR > 1 {
   print $3, $6, $7, $1, sprintf("EUROv2_%06d", NR-1)
-}' hmm_co_events_long.tsv > eurov2.bed
+}' results/hmm_co_events_long.tsv > eurov2.bed
 ```
 
 Split to endpoints, lift, and reconstruct:
@@ -118,12 +130,13 @@ cat RodgersMelnickv2.bed eurov2.bed | awk 'BEGIN{OFS="\t"} {
   $2=y; $3=y+1; print
 }' > markersv2.bed
 
-CrossMap bed v2v5.chain markersv2.bed markersv5.bed
+CrossMap bed data/v2v5.chain markersv2.bed markersv5.bed
 
 awk '
 {
   id=$5; chrkey=$1 FS id
   total[id]++; perchr[chrkey]++
+  sample[id]=$4
   if (!(chrkey in mn) || $2 < mn[chrkey]) mn[chrkey]=$2
   if (!(chrkey in mx) || $3 > mx[chrkey]) mx[chrkey]=$3
 }
@@ -131,9 +144,9 @@ END {
   for (ck in perchr) {
     split(ck, a, FS); chr=a[1]; id=a[2]
     if (total[id]==2 && perchr[ck]==2)
-      print chr, mn[ck], mx[ck], id
+      print chr, mn[ck], mx[ck], sample[id], id
   }
-}' OFS='\t' markersv5.bed | sort -k1,1 -k2,2n > jri_rm_euro_v5.bed
+}' OFS='\t' markersv5.bed | sort -k1,1 -k2,2n > data/jri_rm_euro_v5.bed
 ```
 
 #### AGPv4 sources (Samayoa)
@@ -143,9 +156,9 @@ awk 'NR>1 {
   id=$2"_"$3"_"$4"_"$1
   print $2, $3, $3+1, id
   print $2, $4-1, $4, id
-}' OFS='\t' xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt > lr_markers_v4.bed
+}' OFS='\t' data/xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt > lr_markers_v4.bed
 
-CrossMap bed v4v5.chain lr_markers_v4.bed lr_markers_v5.bed
+CrossMap bed data/v4v5.chain lr_markers_v4.bed lr_markers_v5.bed
 
 awk '
 {
@@ -160,27 +173,27 @@ END {
     if (total[id]==2 && perchr[ck]==2) {
       n=split(id,b,"_"); taxon=b[4]
       for(i=5;i<=n;i++) taxon=taxon"_"b[i]
-      if (chr+0>=1 && chr+0<=10) print chr, mn[ck], mx[ck], taxon
+      if (chr+0>=1 && chr+0<=10) print chr, mn[ck], mx[ck], taxon, id
     }
   }
 }' OFS='\t' lr_markers_v5.bed | sort -k1,1n -k2,2n \
-  > xo_Combined_LR13_LR14_parents2_v5.bed
+  > data/xo_Combined_LR13_LR14_parents2_v5.bed
 ```
 
-Apply the same commands substituting the teosinte file to produce `xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed`.
+Apply the same commands substituting `data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_AGPv4_filtered0210.txt` to produce `data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed`.
 
 ### Step 3 — Building `jri_v5.bed`
 
 Concatenate all four lifted sources and sort:
 
 ```bash
-cat jri_rm_euro_v5.bed \
-    xo_Combined_LR13_LR14_parents2_v5.bed \
-    xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed \
-  | sort -k1,1V -k2,2n > jri_v5.bed
+cat data/jri_rm_euro_v5.bed \
+    data/xo_Combined_LR13_LR14_parents2_v5.bed \
+    data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed \
+  | sort -k1,1V -k2,2n > data/jri_v5.bed
 ```
 
-`jri_v5.bed` contains 373,747 crossover intervals across four sources:
+`data/jri_v5.bed` contains 373,747 crossover intervals across four sources:
 
 | Source | Raw intervals | Lifted | Retention |
 |--------|--------------|--------|-----------|
@@ -191,11 +204,11 @@ cat jri_rm_euro_v5.bed \
 
 ### Step 4 — Deriving `finemap_v5.bed`
 
-`finemap_v5.bed` is a non-overlapping BED6 track representing the crossover density in `jri_v5.bed` as a piecewise-constant recombination rate, scaled so that each chromosome's total genetic length matches the Ogut map.
+`data/finemap_v5.bed` is a non-overlapping BED6 track representing the crossover density in `data/jri_v5.bed` as a piecewise-constant recombination rate, scaled so that each chromosome's total genetic length matches the Ogut map.
 
 **Method:**
 
-1. Assign each interval in `jri_v5.bed` a per-bp weight of `1 / (end − start)`.
+1. Assign each interval in `data/jri_v5.bed` a per-bp weight of `1 / (end − start)`.
 2. Use a sweep-line algorithm to sum weights across all overlapping intervals at each position; merge consecutive positions with equal summed weight into non-overlapping segments.
 3. For each chromosome, normalize weights so the interval-weighted sum equals the Ogut chromosome genetic length in cM.
 4. Walk segments in coordinate order, accumulating `cM_start` and `cM_end`; report `cM_per_Mb = (cM_end − cM_start) / (end − start) × 10⁶`.
@@ -222,7 +235,7 @@ python scripts/build_finemap.py
 
 ### Step 5 — HapMap Exports
 
-`data/hapmap/chr{1..10}.hapmap.tsv` — per-chromosome HapMap-format files derived from `finemap_v5.bed` for use with `msprime.RateMap.read_hapmap()`.
+`data/hapmap/chr{1..10}.hapmap.tsv` — per-chromosome HapMap-format files derived from `data/finemap_v5.bed` for use with `msprime.RateMap.read_hapmap()`.
 
 Format: `Chromosome`, `Position(bp)`, `Rate(cM/Mb)`, `Map(cM)`. One file per chromosome; terminal row rate set to 0 per `msprime` convention. Generated by `scripts/build_finemap.py`.
 
@@ -256,7 +269,7 @@ python scripts/metaplot.py \
   --body-bins 5 \
   --uniform \
   --title "Recombination rate (cM/Mb) around genes" \
-  --output results/metaplot_recombination.pdf \
+  --output results/metaplot_recombination.png \
   --no-show
 ```
 
@@ -319,7 +332,7 @@ Shrinking the flank from ±1 kb to ±100 bp reduces %bp by ~2–3 points and %cM
 
 ## Simulation Regions
 
-Simulated BED region sets with interval lengths drawn from the empirical distribution of `jri_v5.bed`, placed on B73 v5 chromosomes chr1–chr10. Used for comparison with observed crossover distributions.
+Simulated BED region sets with interval lengths drawn from the empirical distribution of `data/jri_v5.bed`, placed on B73 v5 chromosomes chr1–chr10. Used for comparison with observed crossover distributions.
 
 | File | Placement |
 |------|-----------|
@@ -341,7 +354,7 @@ python scripts/plot_example_metaplots.py
 ## Notes
 
 - Each crossover is localized to an interval between flanking markers; the exact breakpoint is unknown and precision is bounded by marker spacing in the source data.
-- Regions with no crossover coverage in `jri_v5.bed` (primarily pericentromeric heterochromatin) carry no rate in `finemap_v5.bed` and are excluded from genome-wide averages.
+- Regions with no crossover coverage in `data/jri_v5.bed` (primarily pericentromeric heterochromatin) carry no rate in `data/finemap_v5.bed` and are excluded from genome-wide averages.
 - The Ogut map sets total cM per chromosome only; the within-chromosome rate distribution comes entirely from the crossover interval data.
 
 ## Acknowledgements
