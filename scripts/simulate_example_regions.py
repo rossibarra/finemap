@@ -7,10 +7,10 @@ from collections import defaultdict
 from pathlib import Path
 
 
-JRI_PATH = Path("jri_v5.bed")
-GFF_PATH = Path("v5.gff3")
+JRI_PATH = Path("data/jri_v5.bed")
+GFF_PATH = Path("data/v5.genes.gff3")
 FAI_PATH = Path("data/v5.fa.gz.fai")
-README_PATH = Path("simulation_readme.md")
+README_PATH = Path("data/simulation_readme.md")
 
 N_REGIONS = 100_000
 FLANK_BP = 5_000
@@ -259,7 +259,7 @@ def write_readme() -> None:
                 "Notes:",
                 "",
                 "- Enrichment is defined by first drawing one point from the target annotation class, then assigning that point a random uniform position within the simulated region.",
-                "- Gene annotations come from `v5.gff3`.",
+                "- Gene annotations come from `data/v5.genes.gff3`.",
                 "- Chromosome lengths come from `data/v5.fa.gz.fai`.",
             ]
         )
@@ -296,9 +296,9 @@ def main() -> None:
         outputs["example4"].append((chrom, start, end, f"example4_{idx:06d}"))
 
     for name, records in outputs.items():
-        write_bed(Path(f"{name}.bed"), records)
+        write_bed(Path("data") / f"{name}.bed", records)
     write_readme()
-    print("Wrote example1.bed through example4.bed and simulation_readme.md")
+    print("Wrote data/example1.bed through data/example4.bed and data/simulation_readme.md")
 
 
 if __name__ == "__main__":

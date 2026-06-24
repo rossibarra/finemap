@@ -5,14 +5,13 @@ from __future__ import annotations
 import csv
 import math
 import os
+import argparse
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from openpyxl import load_workbook
 
-
-INPUT_XLSX = Path("/Users/jeffreyross-ibarra/Downloads/gb-2013-14-9-r103-S4.xlsx")
+DEFAULT_INPUT_XLSX = Path("data/gb-2013-14-9-r103-S4.xlsx")
 MATRIX_DIR = Path("results/hmm_cleaned_matrices")
 HMM_EVENTS_OUTPUT = Path("results/hmm_co_events_long.tsv")
 QC_SUMMARY_OUTPUT = Path("results/hmm_qc_summary.tsv")
@@ -54,8 +53,23 @@ class HMMEvent:
     event_bp: int
 
 
-def load_markers() -> dict[str, list[Marker]]:
-    wb = load_workbook(INPUT_XLSX, read_only=True, data_only=True)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Call European crossover intervals from the Bauer et al. SNP workbook."
+    )
+    parser.add_argument(
+        "--input-xlsx",
+        type=Path,
+        default=DEFAULT_INPUT_XLSX,
+        help=f"Input workbook path. Default: {DEFAULT_INPUT_XLSX}",
+    )
+    return parser.parse_args()
+
+
+def load_markers(input_xlsx: Path) -> dict[str, list[Marker]]:
+    from openpyxl import load_workbook
+
+    wb = load_workbook(input_xlsx, read_only=True, data_only=True)
     ws = wb["Table_S3"]
     header = list(next(ws.iter_rows(min_row=3, max_row=3, values_only=True)))
     idx = {name: i for i, name in enumerate(header)}
@@ -431,10 +445,11 @@ def write_qc_summary(rows: list[dict[str, int | str]]) -> None:
 
 
 def main() -> None:
+    args = parse_args()
     os.environ.setdefault("MPLCONFIGDIR", "/tmp/finemap-mpl")
     MATRIX_DIR.mkdir(parents=True, exist_ok=True)
 
-    markers_by_map = load_markers()
+    markers_by_map = load_markers(args.input_xlsx)
     all_events: list[HMMEvent] = []
     qc_rows: list[dict[str, int | str]] = []
 

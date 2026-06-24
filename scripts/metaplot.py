@@ -26,6 +26,12 @@ def parse_args():
         help="Signal BED file. Midpoints are assigned to bins; missing or non-numeric column 4 is treated as 1.",
     )
     parser.add_argument(
+        "--value-column",
+        type=int,
+        default=4,
+        help="1-based input column to use as signal value. Default: 4.",
+    )
+    parser.add_argument(
         "--bin-size",
         type=int,
         required=True,
@@ -76,6 +82,8 @@ if ARGS.flanking_bp % ARGS.bin_size != 0:
     raise SystemExit("--flanking-bp must be divisible by --bin-size")
 if ARGS.body_bins <= 0:
     raise SystemExit("--body-bins must be > 0")
+if ARGS.value_column < 4:
+    raise SystemExit("--value-column must be 4 or greater")
 
 
 def normalize_chrom_name(value):
@@ -130,10 +138,15 @@ def load_signal(path):
     signal = pd.read_csv(path, sep="\t", header=None)
     if signal.shape[1] < 3:
         raise SystemExit(f"Signal BED must have at least 3 columns: {path}")
-    if signal.shape[1] >= 4:
-        signal = signal.iloc[:, :4].copy()
+    if signal.shape[1] >= ARGS.value_column:
+        value_col = ARGS.value_column - 1
+        signal = signal.iloc[:, [0, 1, 2, value_col]].copy()
         signal.columns = ["chr", "start", "end", "value"]
     else:
+        if ARGS.value_column != 4:
+            raise SystemExit(
+                f"Signal BED has {signal.shape[1]} columns, but --value-column {ARGS.value_column} was requested"
+            )
         signal = signal.iloc[:, :3].copy()
         signal.columns = ["chr", "start", "end"]
         signal["value"] = 1.0

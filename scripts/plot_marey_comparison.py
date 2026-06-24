@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Marey map comparing Ogut v5-lifted positions vs finemap_v5.bed."""
 
+import argparse
 import subprocess
 import tempfile
 from pathlib import Path
@@ -20,6 +21,23 @@ OGUT_V5_OUT = ROOT / "data/ogut_v5.csv"
 
 CHROMS = [f"Chr{i}" for i in range(1, 11)]
 CENTROMERES = ROOT / "data/NAM_centromere_coords-cenH3.csv"
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Plot Ogut v5-lifted positions against finemap_v5.bed."
+    )
+    parser.add_argument(
+        "--rebuild-ogut-v5",
+        action="store_true",
+        help="Lift Ogut AGPv2 markers with CrossMap instead of reading data/ogut_v5.csv.",
+    )
+    parser.add_argument(
+        "--write-ogut-v5",
+        action="store_true",
+        help="Write data/ogut_v5.csv. Use explicitly when regenerating tracked data.",
+    )
+    return parser.parse_args()
 
 
 def load_centromeres():
@@ -58,6 +76,25 @@ def lift_ogut():
     # Shift cM per chromosome so min = 0
     merged["cM_norm"] = merged.groupby("chromosome")["cM"].transform(lambda x: x - x.min())
     return merged
+
+
+def load_ogut_v5():
+    if not OGUT_V5_OUT.exists():
+        raise SystemExit(
+            f"{OGUT_V5_OUT} does not exist; rerun with --rebuild-ogut-v5 --write-ogut-v5"
+        )
+    ogut_v5 = pd.read_csv(OGUT_V5_OUT)
+    return ogut_v5.rename(columns={"chr": "chr_v5", "pos_v5": "start_v5"})
+
+
+def write_ogut_v5(ogut_v5):
+    out_df = (
+        ogut_v5[["chr_v5", "start_v5", "SNP_newID", "cM", "cM_norm"]]
+        .sort_values(["chr_v5", "start_v5"])
+        .rename(columns={"chr_v5": "chr", "start_v5": "pos_v5"})
+    )
+    out_df.to_csv(OGUT_V5_OUT, index=False)
+    print(f"Wrote {OGUT_V5_OUT}")
 
 
 def load_finemap():
@@ -126,17 +163,16 @@ def plot(ogut_v5, finemap, centromeres):
 
 
 def main():
-    print("Lifting Ogut markers to v5...")
-    ogut_v5 = lift_ogut()
-    print(f"  {len(ogut_v5)} markers lifted")
+    args = parse_args()
+    if args.rebuild_ogut_v5:
+        print("Lifting Ogut markers to v5...")
+        ogut_v5 = lift_ogut()
+        print(f"  {len(ogut_v5)} markers lifted")
+    else:
+        ogut_v5 = load_ogut_v5()
 
-    out_df = (
-        ogut_v5[["chr_v5", "start_v5", "SNP_newID", "cM", "cM_norm"]]
-        .sort_values(["chr_v5", "start_v5"])
-        .rename(columns={"chr_v5": "chr", "start_v5": "pos_v5"})
-    )
-    out_df.to_csv(OGUT_V5_OUT, index=False)
-    print(f"Wrote {OGUT_V5_OUT}")
+    if args.write_ogut_v5:
+        write_ogut_v5(ogut_v5)
 
     finemap = load_finemap()
     centromeres = load_centromeres()

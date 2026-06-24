@@ -6,7 +6,7 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
 
 ## Environment Notes
 
-`environment.yml` defines the base conda environment used in this repo. The current scripts shown below also require `pandas` (`scripts/build_finemap.py`, `scripts/metaplot.py`, plotting scripts), `openpyxl` (`scripts/hmm_co_pipeline.py`), and `CrossMap` for lift-over.
+`environment.yml` defines the conda environment used in this repo, including the Python plotting/data dependencies and CrossMap.
 
 ## Table of Contents
 
@@ -70,9 +70,12 @@ Ogut F et al. 2015. *Joint-multiple family linkage analysis predicts within-fami
 
 European crossovers were called from the Bauer et al. SNP workbook (`data/gb-2013-14-9-r103-S4.xlsx`, sheet `Table_S3`) using an HMM pipeline. This produces the 21,026 European intervals that feed into `data/jri_v5.bed`.
 
-The repo contains a copy of the workbook under `data/`, but the current script hardcodes `INPUT_XLSX` to `/Users/jeffreyross-ibarra/Downloads/gb-2013-14-9-r103-S4.xlsx`. Update that constant before rerunning the pipeline elsewhere.
-
 Script: `scripts/hmm_co_pipeline.py`
+
+```bash
+python scripts/hmm_co_pipeline.py \
+  --input-xlsx data/gb-2013-14-9-r103-S4.xlsx
+```
 
 **Marker cleaning** (per population):
 
@@ -87,7 +90,7 @@ This run retained 23 cleaned population matrices and 2,209 individuals.
 
 **HMM model:** run per population, chromosome, and individual. States: `A`, `B`. Emissions: match 0.98, mismatch 0.02, missing 0.50. Distance-aware transitions: base rate 1e-8 per bp, clamped to [1e-6, 0.05]. Decoded with Viterbi. A crossover interval is called at each state change; adjacent events within 2,000,000 bp are merged. Produced 32,439 intervals.
 
-Outputs: `results/hmm_cleaned_matrices/`, `results/hmm_co_events_long.tsv`, `results/hmm_qc_summary.tsv`
+Regenerated intermediate outputs: `results/hmm_cleaned_matrices/`, `results/hmm_co_events_long.tsv`, `results/hmm_qc_summary.tsv`. These are not tracked in the repository; rerun this step before using commands that consume `results/hmm_co_events_long.tsv`.
 
 A Marey map of the HMM intervals can be produced with `scripts/plot_marey_map.py`. The script's default input path is currently stale, so pass the HMM output explicitly:
 
@@ -254,6 +257,12 @@ Outputs: `results/marey_ogut_vs_finemap.png`, `data/ogut_v5.csv`
 python scripts/plot_marey_comparison.py
 ```
 
+By default, the script reads the tracked `data/ogut_v5.csv` and writes only the plot. To regenerate the tracked lifted Ogut table, run:
+
+```bash
+python scripts/plot_marey_comparison.py --rebuild-ogut-v5 --write-ogut-v5
+```
+
 ![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)
 
 ### Recombination Rate Around Genes
@@ -261,11 +270,10 @@ python scripts/plot_marey_comparison.py
 `scripts/metaplot.py` computes mean signal in bins across gene bodies. To plot recombination rate with 5 kb flanks and 500 bp windows at each gene end:
 
 ```bash
-awk 'BEGIN{OFS="\t"} {print $1, $2, $3, $6}' data/finemap_v5.bed > finemap_rate.bed
-
 python scripts/metaplot.py \
   --gff data/v5.genes.gff3 \
-  --input finemap_rate.bed \
+  --input data/finemap_v5.bed \
+  --value-column 6 \
   --bin-size 100 \
   --flanking-bp 5000 \
   --body-bins 5 \
@@ -286,7 +294,8 @@ Key `metaplot.py` arguments:
 | Argument | Description |
 |----------|-------------|
 | `--gff` | Gene annotation GFF/GFF3 |
-| `--input` | Signal BED (column 4 = value; defaults to 1 if absent) |
+| `--input` | Signal BED |
+| `--value-column` | 1-based value column, default 4; use 6 for `data/finemap_v5.bed` |
 | `--bin-size` | Bin width in bp; must divide `--flanking-bp` |
 | `--flanking-bp` | Flank length on each side of TSS/TTS |
 | `--body-bins` | Bins shown from each gene end inside the body |
@@ -311,10 +320,10 @@ python scripts/plot_rate_vs_gene_density.py
 
 For each chromosome, computes the fraction of physical bp and fraction of total cM that fall within 1 kb of any gene body (gene ± 1 kb intervals merged). Recombination is consistently enriched near genes relative to their physical footprint.
 
-Script: `scripts/plot_gene_cM_coverage.py` (accepts `--flank` to change window size; default 1000 bp)
+Script: `scripts/plot_gene_cM_coverage.py` (accepts one or more `--flank` values; default 1000 bp)
 
 ```bash
-python scripts/plot_gene_cM_coverage.py
+python scripts/plot_gene_cM_coverage.py --flank 100 1000
 ```
 
 ![Gene ± 1 kb coverage: physical vs genetic](results/gene_cM_coverage.png)
@@ -346,6 +355,12 @@ Simulated BED region sets with interval lengths drawn from the empirical distrib
 | `data/example4.bed` | Enriched in strand-aware 3′ gene flanks |
 
 Script: `scripts/simulate_example_regions.py`
+
+```bash
+python scripts/simulate_example_regions.py
+```
+
+This regenerates `data/example1.bed` through `data/example4.bed` and writes `data/simulation_readme.md`.
 
 Metaplots across all four sets (5 kb flanks, 500 bp gene-end windows):
 

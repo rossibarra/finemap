@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Per-chromosome bar plot: % physical bp vs % cM within gene ± 1 kb."""
+"""Per-chromosome bar plot: % physical bp vs % cM within gene flanks."""
 
 from pathlib import Path
 
@@ -76,30 +76,19 @@ def overlap_with_merged(seg_starts, seg_ends, merged):
     return overlaps
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--flank", type=int, default=1_000,
-                        help="Flank size in bp around each gene (default: 1000)")
-    args = parser.parse_args()
-    FLANK = args.flank
+def flank_label(flank):
+    return f"{flank // 1000} kb" if flank >= 1000 and flank % 1000 == 0 else f"{flank} bp"
 
-    chr_lengths = load_chr_lengths()
-    genes = load_genes()
-    finemap = pd.read_csv(
-        ROOT / "data/finemap_v5.bed", sep="\t", header=None,
-        names=["chr", "start", "end", "cM_start", "cM_end", "cM_per_Mb"],
-    )
-    finemap["chr"] = finemap["chr"].str.lower()
-    finemap = finemap[finemap["chr"].isin(CHROMS)]
 
+def compute_coverage(flank, chr_lengths, genes, finemap):
     pct_bp, pct_cM = [], []
 
     for chrom in CHROMS:
         chr_len = int(chr_lengths[chrom])
         g = genes[genes["chr"] == chrom]
 
-        starts = np.maximum(0, g["start"].values - FLANK).astype(np.int64)
-        ends = np.minimum(chr_len, g["end"].values + FLANK).astype(np.int64)
+        starts = np.maximum(0, g["start"].values - flank).astype(np.int64)
+        ends = np.minimum(chr_len, g["end"].values + flank).astype(np.int64)
         merged = merge_intervals(starts, ends)
 
         # % physical
@@ -122,26 +111,78 @@ def main():
         cM_in = np.sum(seg_cM * np.where(seg_len > 0, ov / seg_len, 0.0))
         pct_cM.append(100.0 * cM_in / total_cM)
 
-    # Plot
+    return pct_bp, pct_cM
+
+
+def plot(results):
     x = np.arange(len(CHROMS))
-    w = 0.35
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.bar(x - w / 2, pct_bp, width=w, label="% physical bp", color="#4393c3")
-    ax.bar(x + w / 2, pct_cM, width=w, label="% cM", color="#d6604d")
-    ax.set_xticks(x)
-    ax.set_xticklabels([f"Chr{i}" for i in range(1, 11)])
-    flank_label = f"{FLANK // 1000} kb" if FLANK >= 1000 else f"{FLANK} bp"
-    ax.set_ylabel(f"% within gene ± {flank_label}")
-    ax.set_title(f"Gene ± {flank_label} coverage: physical vs genetic (cM)", fontsize=11)
-    ax.legend(fontsize=9)
+    n_flanks = len(results)
+    fig, axes = plt.subplots(
+        n_flanks, 1, figsize=(10, 4.2 * n_flanks), sharex=True, squeeze=False
+    )
+    axes = axes.flatten()
+
+    for ax, (flank, pct_bp, pct_cM) in zip(axes, results):
+        w = 0.35
+        label = flank_label(flank)
+        ax.bar(x - w / 2, pct_bp, width=w, label="% physical bp", color="#4393c3")
+        ax.bar(x + w / 2, pct_cM, width=w, label="% cM", color="#d6604d")
+        ax.set_ylabel(f"% within gene ± {label}")
+        ax.set_title(f"Gene ± {label} coverage: physical vs genetic (cM)", fontsize=11)
+        ax.legend(fontsize=9)
+
+    axes[-1].set_xticks(x)
+    axes[-1].set_xticklabels([f"Chr{i}" for i in range(1, 11)])
     fig.tight_layout()
     out = ROOT / "results/gene_cM_coverage.png"
     fig.savefig(out, dpi=150)
     print(f"Wrote {out}")
 
-    print(f"\n{'Chr':>6}  {'%bp':>8}  {'%cM':>8}")
-    for c, b, m in zip(CHROMS, pct_bp, pct_cM):
-        print(f"{c:>6}  {b:8.1f}  {m:8.1f}")
+
+def print_table(results):
+    headers = ["Chr"]
+    for flank, _, _ in results:
+        label = flank_label(flank)
+        headers.append(f"%bp (±{label})")
+    for flank, _, _ in results:
+        label = flank_label(flank)
+        headers.append(f"%cM (±{label})")
+    print("\n" + "  ".join(f"{h:>12}" for h in headers))
+    for idx, chrom in enumerate(CHROMS):
+        row = [chrom]
+        for _, pct_bp, pct_cM in results:
+            row.append(f"{pct_bp[idx]:.1f}")
+        for _, pct_bp, pct_cM in results:
+            row.append(f"{pct_cM[idx]:.1f}")
+        print("  ".join(f"{value:>12}" for value in row))
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--flank",
+        type=int,
+        nargs="+",
+        default=[1_000],
+        help="One or more flank sizes in bp around each gene (default: 1000)",
+    )
+    args = parser.parse_args()
+
+    chr_lengths = load_chr_lengths()
+    genes = load_genes()
+    finemap = pd.read_csv(
+        ROOT / "data/finemap_v5.bed", sep="\t", header=None,
+        names=["chr", "start", "end", "cM_start", "cM_end", "cM_per_Mb"],
+    )
+    finemap["chr"] = finemap["chr"].str.lower()
+    finemap = finemap[finemap["chr"].isin(CHROMS)]
+
+    results = []
+    for flank in args.flank:
+        pct_bp, pct_cM = compute_coverage(flank, chr_lengths, genes, finemap)
+        results.append((flank, pct_bp, pct_cM))
+    plot(results)
+    print_table(results)
 
 
 if __name__ == "__main__":
