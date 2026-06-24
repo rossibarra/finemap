@@ -16,6 +16,7 @@ OGUT_V2 = ROOT / "data/ogut_fifthcM_map_agpv2.csv"
 CHAIN = ROOT / "data/v2v5.chain"
 FINEMAP = ROOT / "data/finemap_v5.bed"
 OUT = ROOT / "results/marey_ogut_vs_finemap.png"
+OGUT_V5_OUT = ROOT / "data/ogut_v5.csv"
 
 CHROMS = [f"Chr{i}" for i in range(1, 11)]
 CENTROMERES = ROOT / "data/NAM_centromere_coords-cenH3.csv"
@@ -128,6 +129,15 @@ def main():
     print("Lifting Ogut markers to v5...")
     ogut_v5 = lift_ogut()
     print(f"  {len(ogut_v5)} markers lifted")
+
+    out_df = (
+        ogut_v5[["chr_v5", "start_v5", "SNP_newID", "cM", "cM_norm"]]
+        .sort_values(["chr_v5", "start_v5"])
+        .rename(columns={"chr_v5": "chr", "start_v5": "pos_v5"})
+    )
+    out_df.to_csv(OGUT_V5_OUT, index=False)
+    print(f"Wrote {OGUT_V5_OUT}")
+
     finemap = load_finemap()
     centromeres = load_centromeres()
     print("Plotting...")
