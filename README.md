@@ -260,7 +260,7 @@ python scripts/plot_marey_comparison.py
 By default, the script reads the tracked `data/ogut_v5.csv` and writes only the plot. To regenerate the tracked lifted Ogut table, run:
 
 ```bash
-python scripts/plot_marey_comparison.py --rebuild-ogut-v5 --write-ogut-v5
+python scripts/plot_marey_comparison.py --regenerate-ogut-v5
 ```
 
 ![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)

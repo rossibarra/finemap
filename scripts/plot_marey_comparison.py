@@ -28,14 +28,9 @@ def parse_args():
         description="Plot Ogut v5-lifted positions against finemap_v5.bed."
     )
     parser.add_argument(
-        "--rebuild-ogut-v5",
+        "--regenerate-ogut-v5",
         action="store_true",
-        help="Lift Ogut AGPv2 markers with CrossMap instead of reading data/ogut_v5.csv.",
-    )
-    parser.add_argument(
-        "--write-ogut-v5",
-        action="store_true",
-        help="Write data/ogut_v5.csv. Use explicitly when regenerating tracked data.",
+        help="Lift Ogut AGPv2 markers with CrossMap and overwrite data/ogut_v5.csv.",
     )
     return parser.parse_args()
 
@@ -81,7 +76,7 @@ def lift_ogut():
 def load_ogut_v5():
     if not OGUT_V5_OUT.exists():
         raise SystemExit(
-            f"{OGUT_V5_OUT} does not exist; rerun with --rebuild-ogut-v5 --write-ogut-v5"
+            f"{OGUT_V5_OUT} does not exist; rerun with --regenerate-ogut-v5"
         )
     ogut_v5 = pd.read_csv(OGUT_V5_OUT)
     return ogut_v5.rename(columns={"chr": "chr_v5", "pos_v5": "start_v5"})
@@ -164,15 +159,13 @@ def plot(ogut_v5, finemap, centromeres):
 
 def main():
     args = parse_args()
-    if args.rebuild_ogut_v5:
+    if args.regenerate_ogut_v5:
         print("Lifting Ogut markers to v5...")
         ogut_v5 = lift_ogut()
         print(f"  {len(ogut_v5)} markers lifted")
+        write_ogut_v5(ogut_v5)
     else:
         ogut_v5 = load_ogut_v5()
-
-    if args.write_ogut_v5:
-        write_ogut_v5(ogut_v5)
 
     finemap = load_finemap()
     centromeres = load_centromeres()
