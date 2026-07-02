@@ -22,6 +22,7 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
   - [Step 5 — HapMap Exports](#step-5--hapmap-exports)
 - [Analysis](#analysis)
   - [Marey Map: Ogut vs finemap_v5](#marey-map-ogut-vs-finemap_v5)
+  - [Recombination Rate Along Chromosomes](#recombination-rate-along-chromosomes)
   - [Recombination Rate Around Genes](#recombination-rate-around-genes)
   - [Recombination Rate vs Gene Density](#recombination-rate-vs-gene-density)
   - [Gene ± 1 kb Coverage: Physical vs Genetic](#gene--1-kb-coverage-physical-vs-genetic)
@@ -264,6 +265,27 @@ python scripts/plot_marey_comparison.py --regenerate-ogut-v5
 ```
 
 ![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)
+
+### Recombination Rate Along Chromosomes
+
+Plots recombination rate (cM/Mb) as a function of physical position for each chromosome in a 2×5 grid, overlaying `finemap_v5.bed` on the lifted Ogut map. Where the Marey map compares cumulative genetic position, this view compares the local *rate*, making it easy to see where the two maps agree on recombination hotspots and where the piecewise-constant `finemap_v5` track resolves finer structure than the marker-limited Ogut map.
+
+For each chromosome:
+
+- **finemap_v5** (red step line) — the `cM_per_Mb` value of each segment in `data/finemap_v5.bed`, drawn at the segment midpoint.
+- **Ogut (v5 lifted)** (gray points) — per-interval rate between consecutive lifted markers in `data/ogut_v5.csv`, computed as Δ`cM_norm` / Δ`pos` and plotted at each interval midpoint. Negative rates from liftover ordering artefacts are dropped.
+- **Centromere (B73)** (blue band) — CenH3-based centromere span from `data/NAM_centromere_coords-cenH3.csv`.
+
+Script: `scripts/plot_rate_along_chromosomes.py`  
+Output: `results/rate_along_chromosomes.png`
+
+```bash
+python scripts/plot_rate_along_chromosomes.py
+```
+
+![Recombination rate along chromosomes](results/rate_along_chromosomes.png)
+
+Both maps show recombination suppressed across the pericentromeric regions and elevated toward the chromosome arms, with the finemap track capturing sharp arm hotspots that the sparser Ogut markers smooth over.
 
 ### Recombination Rate Around Genes
 
