@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
-"""Plot recombination rate (cM/Mb) along each chromosome for finemap_v5 and Ogut."""
+"""Plot recombination rate (cM/Mb) along each chromosome for finemap_v5 and Ogut.
+
+Exploratory, standalone script (not part of the documented pipeline). Produces a
+2x5 grid, one panel per chromosome, showing local recombination rate vs physical
+position. This is essentially the slope of the Marey map in
+`plot_marey_comparison.py`, which plots cumulative cM instead of rate.
+
+Overlays, per chromosome:
+  - finemap_v5 (red step line): per-segment `cM_per_Mb` from `data/finemap_v5.bed`.
+  - Ogut (points): per-interval rate between consecutive lifted markers in
+    `data/ogut_v5.csv` (delta cM_norm / delta pos); negative liftover artefacts dropped.
+  - Centromere (blue band): CenH3 span from `data/NAM_centromere_coords-cenH3.csv`.
+
+Run: `python scripts/plot_rate_along_chromosomes.py`
+Writes: `results/rate_along_chromosomes.png`
+"""
 
 from pathlib import Path
 
@@ -65,17 +80,18 @@ def plot(finemap, ogut, centromeres):
             ax.set_visible(False)
             continue
 
-        # Ogut: scatter of interval rates
-        ax.scatter(
-            og_plot["mid"] / 1e6, og_plot["rate"],
-            s=1, color="#999999", alpha=0.6, zorder=2, label="Ogut (lifted)"
-        )
-
         # finemap_v5: step line using segment midpoints and cM_per_Mb
         mid_fm = (fm["start"].values + fm["end"].values) / 2
         ax.step(
             mid_fm / 1e6, fm["cM_per_Mb"].values,
-            where="mid", color="#d62728", linewidth=0.8, zorder=3, label="finemap_v5"
+            where="mid", color="#d62728", linewidth=0.8, alpha=0.5,
+            zorder=2, label="finemap_v5"
+        )
+
+        # Ogut: scatter of interval rates, drawn on top
+        ax.scatter(
+            og_plot["mid"] / 1e6, og_plot["rate"],
+            s=2, color="#333333", alpha=0.7, zorder=3, label="Ogut (lifted)"
         )
 
         if chrom in centromeres.index:
