@@ -245,9 +245,9 @@ python scripts/build_finemap.py
 
 For a crossover observed only within the half-open interval `[L_i, R_i)`, its contribution to the conditional likelihood is
 
-```text
-P(interval i | r) = integral[L_i,R_i] r(x) dx / integral[chromosome] r(x) dx
-```
+$$
+P(\text{interval } i \mid r) = \frac{\displaystyle\int_{L_i}^{R_i} r(x)\,dx}{\displaystyle\int_{\text{chromosome}} r(x)\,dx}
+$$
 
 The model represents `log(r)` as piecewise constant in 100 kb bins and applies a Gaussian random-walk penalty to differences between neighboring log-rates. This partially pools adjacent bins, reducing sampling noise while allowing supported local peaks. The model is fitted independently for each chromosome by maximum a posteriori optimization. After fitting, each relative rate profile is scaled to the same Ogut chromosome length used by the default map.
 
