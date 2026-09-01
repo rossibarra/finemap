@@ -64,20 +64,13 @@ def build_finemap(jri, chr_cM):
             cM_per_bp = w * scale
             cM_end = cM_pos + (seg_e - seg_s) * cM_per_bp
 
-            if cM_end <= cM_pos:
-                if cM_end > cM_pos - 1e-9:
-                    cM_end = cM_pos + 1e-6
-                    cM_per_Mb = 0.0
-                else:
-                    print(
-                        f"Error: non-monotonic cM on {chrom} at {seg_s}-{seg_e}: "
-                        f"cM_start={cM_pos:.6f} cM_end={cM_end:.6f}",
-                        file=sys.stderr,
-                    )
-                    cM_end = cM_pos + 1e-6
-                    cM_per_Mb = 0.0
-            else:
-                cM_per_Mb = cM_per_bp * 1e6
+            if cM_end < cM_pos:
+                raise FloatingPointError(
+                    f"Decreasing cM on {chrom} at {seg_s}-{seg_e}: "
+                    f"cM_start={cM_pos:.17g}, cM_end={cM_end:.17g}, "
+                    f"weight={w:.17g}, scale={scale:.17g}"
+                )
+            cM_per_Mb = 0.0 if cM_end == cM_pos else cM_per_bp * 1e6
 
             records.append((chrom, seg_s, seg_e, cM_pos, cM_end, cM_per_Mb))
             cM_pos = cM_end

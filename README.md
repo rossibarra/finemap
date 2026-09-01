@@ -1,6 +1,6 @@
 # FineMap
 
-Builds a piecewise-constant recombination map (`finemap_v5.bed`) for maize on B73 v5 coordinates by combining crossover intervals from four published datasets, normalizing to Ogut chromosome-scale genetic lengths, and exporting per-chromosome HapMap files for use with `msprime`.
+Builds Ogut-calibrated, piecewise-constant recombination maps for maize on B73 v5 coordinates by combining crossover intervals from four published datasets. The crossover data determine the within-chromosome rate profile, while the Ogut map supplies each chromosome's total genetic length. The original interval-density map (`finemap_v5.bed`) is the default; a smoothed hierarchical interval-censored map (`finemap_hierarchical_v5.bed`) is provided as an alternative.
 
 If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map of maize. [doi.org/10.5281/zenodo.19639077](https://doi.org/10.5281/zenodo.19639077)
 
@@ -19,6 +19,7 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
   - [Step 2 — Lift-Over To B73 v5](#step-2--lift-over-to-b73-v5)
   - [Step 3 — Building jri_v5.bed](#step-3--building-jri_v5bed)
   - [Step 4 — Deriving finemap_v5.bed](#step-4--deriving-finemap_v5bed)
+    - [Alternative Hierarchical Map](#alternative-hierarchical-map)
   - [Step 5 — HapMap Exports](#step-5--hapmap-exports)
 - [Analysis](#analysis)
   - [Marey Map: Ogut vs finemap_v5](#marey-map-ogut-vs-finemap_v5)
@@ -209,7 +210,7 @@ cat data/jri_rm_euro_v5.bed \
 
 ### Step 4 — Deriving `finemap_v5.bed`
 
-`data/finemap_v5.bed` is a non-overlapping BED6 track representing the crossover density in `data/jri_v5.bed` as a piecewise-constant recombination rate, scaled so that each chromosome's total genetic length matches the Ogut map.
+`data/finemap_v5.bed` is the default non-overlapping BED6 track. It represents the crossover density in `data/jri_v5.bed` as a piecewise-constant recombination rate. It is Ogut-calibrated: the crossover intervals determine the relative rate profile within each chromosome, and that profile is scaled so its total genetic length matches the Ogut map.
 
 **Method:**
 
@@ -237,6 +238,32 @@ Script: `scripts/build_finemap.py` (also regenerates HapMap files)
 ```bash
 python scripts/build_finemap.py
 ```
+
+#### Alternative Hierarchical Map
+
+`data/finemap_hierarchical_v5.bed` is an alternative Ogut-calibrated map that estimates a smooth latent recombination-rate profile from the crossover intervals. Unlike the default estimator, it does not assign a fixed uniform probability density to each interval independently and then add those densities. Instead, it treats each crossover location as interval-censored under a shared chromosome-wide rate function.
+
+For a crossover observed only within the half-open interval `[L_i, R_i)`, its contribution to the conditional likelihood is
+
+```text
+P(interval i | r) = integral[L_i,R_i] r(x) dx / integral[chromosome] r(x) dx
+```
+
+The model represents `log(r)` as piecewise constant in 100 kb bins and applies a Gaussian random-walk penalty to differences between neighboring log-rates. This partially pools adjacent bins, reducing sampling noise while allowing supported local peaks. The model is fitted independently for each chromosome by maximum a posteriori optimization. After fitting, each relative rate profile is scaled to the same Ogut chromosome length used by the default map.
+
+The interval-location likelihood identifies the relative spatial profile but not absolute genetic length: multiplying every rate on a chromosome by the same constant leaves the likelihood unchanged. Consequently, the hierarchical map still requires an external scale. Ogut calibration is used because the effective number and structure of informative meioses are not consistently available across the input mapping populations.
+
+**Output:** `data/finemap_hierarchical_v5.bed` — 21,325 non-overlapping 100 kb segments (with a shorter terminal segment on each chromosome).
+
+**Output columns:** `chrom`, `start`, `end`, `cM_start`, `cM_end`, `cM_per_Mb`
+
+Script: `scripts/build_hierarchical_finemap.py`
+
+```bash
+python scripts/build_hierarchical_finemap.py
+```
+
+Key options are `--bin-size`, `--smoothness`, `--iterations`, `--learning-rate`, and `--output`. The defaults reproduce `data/finemap_hierarchical_v5.bed`.
 
 ### Step 5 — HapMap Exports
 
@@ -374,7 +401,8 @@ python scripts/plot_example_metaplots.py
 
 - Each crossover is localized to an interval between flanking markers; the exact breakpoint is unknown and precision is bounded by marker spacing in the source data.
 - Regions with no crossover coverage in `data/jri_v5.bed` (primarily pericentromeric heterochromatin) carry no rate in `data/finemap_v5.bed` and are excluded from genome-wide averages.
-- The Ogut map sets total cM per chromosome only; the within-chromosome rate distribution comes entirely from the crossover interval data.
+- Both final maps are Ogut-calibrated: the Ogut map sets total cM per chromosome only, while the within-chromosome rate distributions come from the crossover interval data.
+- `finemap_v5.bed` is the default interval-density map. `finemap_hierarchical_v5.bed` is the smoothed interval-censored alternative; it should be selected explicitly when downstream analyses benefit from partial pooling across neighboring 100 kb bins.
 
 ## Acknowledgements
 
