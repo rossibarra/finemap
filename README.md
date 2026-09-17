@@ -26,6 +26,7 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
   - [Recombination Rate Around Genes](#recombination-rate-around-genes)
   - [Recombination Rate vs Gene Density](#recombination-rate-vs-gene-density)
   - [Gene ± 1 kb Coverage: Physical vs Genetic](#gene--1-kb-coverage-physical-vs-genetic)
+  - [Nucleotide Diversity vs Recombination Rate](#nucleotide-diversity-vs-recombination-rate)
 - [Simulation Regions](#simulation-regions)
 - [Notes](#notes)
 
@@ -369,6 +370,19 @@ python scripts/plot_gene_cM_coverage.py --flank 100 1000
 | 10  | 8.8 | 11.4 | 16.9 | 22.5 |
 
 Shrinking the flank from ±1 kb to ±100 bp reduces %bp by ~2–3 points and %cM by ~4–5 points, but the cM/bp enrichment ratio (~1.5–1.9×) is stable across both windows, suggesting elevated recombination near genes is distributed broadly within the 1 kb flanks rather than concentrated at gene edges.
+
+### Nucleotide Diversity vs Recombination Rate
+
+Estimates nucleotide diversity (π) in the same 100 kb windows as `finemap_hierarchical_v5.bed` from an all-sites VCF, and correlates it with the recombination rate. π rises steeply with recombination and saturates above ~0.5 cM/Mb, the expected signature of linked selection.
+
+Scripts: `scripts/haploid_pi.py`, `scripts/pi_vs_recombination.py`  
+Output: `results/pi_vs_recombination.png`
+
+Full walkthrough: [PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md)
+
+The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any all-sites VCF.
+
+![π vs recombination rate](results/pi_vs_recombination.png)
 
 ## Simulation Regions
 

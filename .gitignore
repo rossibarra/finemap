@@ -7,3 +7,6 @@ results/*
 data/*.fa.gz
 data/*.fa.gz.fai
 data/*.fa.gz.gzi
+
+# Derived from unpublished genotype data
+data/pixy/
