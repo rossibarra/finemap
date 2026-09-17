@@ -395,6 +395,10 @@ Output: `results/pi_coding_vs_recombination.png`, `results/pi_coding_vs_recombin
 
 Full walkthrough: [PI_CODING_VS_RECOMBINATION.md](PI_CODING_VS_RECOMBINATION.md)
 
+Restricting all three site classes to the 11,429 windows that pass every callable-site filter makes the comparison exact: 4D > 0D in every population, and the decile relationship is close to log-linear rather than saturating.
+
+![diversity vs recombination by site class](results/pi_classes_vs_recombination.png)
+
 The genotype data used for this analysis are unpublished and are not distributed with this repository. The reference genome and annotation are downloaded from MaizeGDB and are git-ignored.
 
 ![π at 0D and 4D sites vs recombination rate](results/pi_coding_vs_recombination.png)

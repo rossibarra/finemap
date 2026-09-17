@@ -25,6 +25,7 @@ neighbouring selected sites is broken up faster.
   - [Step 4 — Correlation and Figures](#step-4--correlation-and-figures)
 - [Callable-Site Threshold](#callable-site-threshold)
 - [Results](#results)
+- [Comparison Across Site Classes](#comparison-across-site-classes)
 - [Caveats](#caveats)
 
 ## Input Data
@@ -307,6 +308,62 @@ trend is non-monotonic, with a conspicuous high point in the lowest deciles and 
 selection in high-recombination regions, not a demonstration of it. Most of what drives π up with
 recombination is shared between 0D and 4D sites and therefore cancels in the ratio, which is
 precisely why the ratio is the interpretable quantity and also why it is small.
+
+## Comparison Across Site Classes
+
+Each site class needs its own callable-site threshold, so the analyses above rest on
+different window sets (16,095 all-sites, 11,945 4D, 12,845 0D). Comparing ρ between
+classes across different windows conflates the site class with which windows survived.
+`scripts/pi_classes_vs_recombination.py` restricts all three to the **11,429 windows that
+pass every filter**, so the only thing differing between series is which sites are counted.
+
+```bash
+python scripts/pi_classes_vs_recombination.py \
+  --bed data/finemap_hierarchical_v5.bed \
+  --out-prefix results/pi_classes_vs_recombination
+```
+
+![diversity vs recombination by site class](results/pi_classes_vs_recombination.png)
+
+Top row: π by recombination decile, as sum(count_diffs)/sum(count_comparisons) within each
+decile, which keeps zero-π windows in the estimate. Bottom row: every window on log-log
+axes with an ordinary least-squares fit of log₁₀(π) on log₁₀(rate).
+
+On the matched set:
+
+| | Spearman ρ | | | log-log slope | | |
+|---|---|---|---|---|---|---|
+| **class** | maize | *mexicana* | *parviglumis* | maize | *mexicana* | *parviglumis* |
+| 4D | **0.362** | **0.313** | **0.307** | 0.21 | 0.19 | 0.17 |
+| 0D | 0.297 | 0.235 | 0.220 | 0.18 | 0.16 | 0.15 |
+| all sites | 0.276 | 0.205 | 0.200 | 0.20 | 0.10 | 0.09 |
+
+**4D exceeds 0D in every population**, and the gap widens on matched windows (0.064 /
+0.078 / 0.086) relative to the separate analyses. This is the central result: neutral
+sites retain the signature of linked selection, while 0D diversity is already suppressed
+by direct purifying selection whatever the local rate.
+
+All sites ranks last here, which is not a contradiction of the 0.332 reported in
+[PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md). The matched set is by construction the
+gene-containing subset of the genome — distal, high-recombination windows — so the
+recombination range is compressed and every correlation computed on it shrinks. Use 0.332
+for all sites genome-wide and the table above only for comparing classes.
+
+Two features are visible only on log axes:
+
+- **The decile curves are close to log-linear.** The "steep rise then saturation above
+  ~0.5 cM/Mb" seen on a linear x-axis is largely the shape of the rate distribution. The
+  relationship is nearer a power law than a saturating one, as expected if diversity
+  scales with *N*e·r.
+- **Maize is the outlier at all sites** (slope 0.20 vs 0.10 and 0.09) but not in the coding
+  classes (0.21 vs 0.19 and 0.17). Maize's steeper all-sites response therefore comes from
+  non-coding sequence rather than from genes — possibly the domestication bottleneck acting
+  where background selection is weaker, possibly a difference in what aligns in maize
+  versus the teosintes. Unresolved.
+
+Windows with π = 0 (3.5% at 4D, 3.2% at 0D on this set) cannot be drawn on a log axis and
+are excluded from the scatter and the fitted slopes. They concentrate at low rate, so the
+slopes are if anything slightly under-estimated. The decile panels are unaffected.
 
 ## Caveats
 
