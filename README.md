@@ -27,6 +27,8 @@ If you use, please cite: Ross-Ibarra, J. 2026. FineMap: a composite genetic map 
   - [Recombination Rate vs Gene Density](#recombination-rate-vs-gene-density)
   - [Gene ± 1 kb Coverage: Physical vs Genetic](#gene--1-kb-coverage-physical-vs-genetic)
   - [Nucleotide Diversity vs Recombination Rate](#nucleotide-diversity-vs-recombination-rate)
+  - [Coding-Site Diversity (0D/4D) vs Recombination Rate](#coding-site-diversity-0d4d-vs-recombination-rate)
+  - [Recombination Hotspots and the Resolution Limit of FineMap](#recombination-hotspots-and-the-resolution-limit-of-finemap)
 - [Simulation Regions](#simulation-regions)
 - [Notes](#notes)
 
@@ -383,6 +385,46 @@ Full walkthrough: [PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md)
 The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any all-sites VCF.
 
 ![π vs recombination rate](results/pi_vs_recombination.png)
+
+### Coding-Site Diversity (0D/4D) vs Recombination Rate
+
+Splits π by degeneracy class: 0-fold degenerate sites (a nonsynonymous proxy) and 4-fold degenerate sites (a synonymous proxy), annotated from the B73 v5 genome and the full Zm00001eb.1 CDS annotation. Both classes rise with recombination, more steeply at 4D than at 0D, and the ratio π<sub>0D</sub>/π<sub>4D</sub> — an index of the efficacy of purifying selection — declines weakly but consistently with rate in all three populations.
+
+Scripts: `scripts/degenerate_sites.py`, `scripts/haploid_pi.py --restrict`, `scripts/pi_coding_vs_recombination.py`  
+Output: `results/pi_coding_vs_recombination.png`, `results/pi_coding_vs_recombination_ratio.png`
+
+Full walkthrough: [PI_CODING_VS_RECOMBINATION.md](PI_CODING_VS_RECOMBINATION.md)
+
+The genotype data used for this analysis are unpublished and are not distributed with this repository. The reference genome and annotation are downloaded from MaizeGDB and are git-ignored.
+
+![π at 0D and 4D sites vs recombination rate](results/pi_coding_vs_recombination.png)
+
+![π0D/π4D vs recombination rate](results/pi_coding_vs_recombination_ratio.png)
+
+### Recombination Hotspots and the Resolution Limit of FineMap
+
+An attempt to relate π to distance from recombination hotspots instead established a
+methodological limit worth knowing before using `finemap_v5.bed` at fine scale:
+**the interval-density map has no genuine resolution below roughly 100 kb.**
+
+`build_finemap.py` gives each crossover a weight of `1/(end - start)` spread uniformly
+across its interval, so per-bp weight density scales as 1/width². The source crossover
+intervals have a median width of 133 kb, and only 7.9% are narrower than 10 kb — yet that
+narrow tail supplies a median 82% of the crossover weight in any hotspot called from the
+map. Apparent kb-scale hotspots track marker density in the source crosses, not
+recombination. Controlling for local background rate cannot rescue the analysis either,
+since the background rate is built from the same smeared crossovers.
+
+Analyses at 100 kb and coarser — including the two above — are unaffected.
+
+Scripts: `scripts/finemap_resolution.py`, `scripts/define_hotspots.py`, `scripts/define_hotspots_sliding.py`, `scripts/pi_vs_hotspot_distance.py`  
+Output: `results/finemap_resolution.png`
+
+Full writeup: [PI_VS_HOTSPOT_DISTANCE.md](PI_VS_HOTSPOT_DISTANCE.md)
+
+The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any all-sites VCF.
+
+![FineMap resolution diagnostic](results/finemap_resolution.png)
 
 ## Simulation Regions
 

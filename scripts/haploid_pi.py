@@ -79,7 +79,24 @@ def parse_header(stream):
     sys.exit("empty VCF")
 
 
-def process_vcf(path, pop_index, windows, window_size, chunk_bytes, progress):
+def load_restrict(path, key):
+    """Return {chrom: sorted 1-based position array} from an .npz of '<chrom>_<key>' arrays."""
+    if path is None:
+        return None
+    data = np.load(path)
+    suffix = f"_{key}"
+    out = {}
+    for name in data.files:
+        if name.endswith(suffix):
+            arr = np.asarray(data[name], dtype=np.int64)
+            out[name[: -len(suffix)]] = np.sort(arr)
+    if not out:
+        sys.exit(f"{path}: no arrays ending in {suffix!r}")
+    return out
+
+
+def process_vcf(path, pop_index, windows, window_size, chunk_bytes, progress,
+                restrict=None):
     """Accumulate diffs/comparisons/sites per population per window."""
     proc = open_vcf(path)
     stream = proc.stdout
@@ -139,6 +156,23 @@ def process_vcf(path, pop_index, windows, window_size, chunk_bytes, progress):
             dtype=np.int64,
             count=len(lines),
         )
+        if restrict is not None:
+            # Membership test against the sorted position list for this chromosome,
+            # rather than a per-chromosome boolean mask of ~300M elements.
+            target = restrict.get(chrom_seen)
+            if target is None or target.size == 0:
+                keep = np.zeros(len(pos), dtype=bool)
+            else:
+                j = np.searchsorted(target, pos)
+                np.clip(j, 0, target.size - 1, out=j)
+                keep = target[j] == pos
+            if not keep.any():
+                n_lines += len(lines)
+                continue
+            pos = pos[keep]
+            codes = codes[keep]
+            called = called[keep]
+
         win = (pos - 1) // window_size  # VCF POS is 1-based, BED starts are 0-based
         np.clip(win, 0, n_win - 1, out=win)
 
@@ -147,7 +181,7 @@ def process_vcf(path, pop_index, windows, window_size, chunk_bytes, progress):
             sub = codes[:, idx]
             sub_called = called[:, idx]
             n = sub_called.sum(axis=1).astype(np.int64)
-            sumsq = np.zeros(len(lines), dtype=np.int64)
+            sumsq = np.zeros(len(pos), dtype=np.int64)
             for allele in range(max_allele + 1):
                 c = (sub == allele).sum(axis=1).astype(np.int64)
                 sumsq += c * c
@@ -182,6 +216,10 @@ def main():
     ap.add_argument("--out", required=True, help="output TSV (pixy pi format)")
     ap.add_argument("--lowercase-chrom", action="store_true",
                     help="map BED 'Chr1' to VCF 'chr1'")
+    ap.add_argument("--restrict", help="npz of '<chrom>_<key>' 1-based position arrays; "
+                                       "only those sites contribute to pi")
+    ap.add_argument("--restrict-key", default="4D",
+                    help="array suffix inside --restrict (default 4D)")
     ap.add_argument("--chunk-bytes", type=int, default=1 << 24)
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
@@ -189,6 +227,10 @@ def main():
     prefix = (lambda c: c.replace("Chr", "chr")) if args.lowercase_chrom else (lambda c: c)
     pops = read_populations(args.populations)
     windows = read_windows(args.windows, prefix)
+    restrict = load_restrict(args.restrict, args.restrict_key)
+    if restrict is not None and not args.quiet:
+        total = sum(a.size for a in restrict.values())
+        print(f"restricting to {total:,} {args.restrict_key} sites", file=sys.stderr)
 
     if not args.quiet:
         sizes = ", ".join(f"{p} n={len(s)}" for p, s in pops.items())
@@ -201,7 +243,7 @@ def main():
             if not args.quiet:
                 print(f"{path}", file=sys.stderr)
             chrom, acc = process_vcf(path, pops, windows, args.window_size,
-                                     args.chunk_bytes, not args.quiet)
+                                     args.chunk_bytes, not args.quiet, restrict)
             starts, ends = windows[chrom]
             for pop in pops:
                 a = acc[pop]

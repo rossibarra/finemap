@@ -10,3 +10,14 @@ data/*.fa.gz.gzi
 
 # Derived from unpublished genotype data
 data/pixy/
+
+# Large reference downloads (B73 v5 genome + full annotation, MaizeGDB)
+data/Zm-B73-REFERENCE-NAM-5.0.fa.gz
+data/Zm-B73-REFERENCE-NAM-5.0.fa.gz.fai
+data/Zm-B73-REFERENCE-NAM-5.0.fa.gz.gzi
+data/Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.gff3.gz
+data/Zm-B73-REFERENCE-NAM-5.0_Zm00001eb.1.canonical_transcripts.gz
+data/degenerate_sites_v5.npz
+
+# Python bytecode
+__pycache__/
