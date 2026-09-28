@@ -86,7 +86,7 @@ remainders), contiguous from position 0 with no gaps. Measuring π on exactly th
 the map is defined on avoids any interpolation between the two variables.
 
 The smoothed hierarchical map is the right choice here rather than `data/finemap_v5.bed`:
-the interval-density map has 214,104 variable-width intervals, many only a few bp wide,
+the interval-density map has 193,790 variable-width intervals, many only a few bp wide,
 which are far too small to hold enough callable sites for a π estimate.
 
 Note that the BED uses `Chr1` while the VCFs use `chr1`; `--lowercase-chrom` reconciles
@@ -161,21 +161,21 @@ Outputs `results/pi_vs_recombination.png`, `_summary.tsv`, and `_windows.tsv.gz`
 
 | Population | π (genome-wide) | Spearman ρ | 95% CI | Partial ρ |
 |------------|-----------------|------------|--------|-----------|
-| maize | 0.0124 | 0.332 | 0.279–0.379 | 0.170 |
-| *mexicana* | 0.0205 | 0.272 | 0.219–0.326 | 0.140 |
-| *parviglumis* | 0.0226 | 0.258 | 0.207–0.310 | 0.130 |
+| maize | 0.0124 | 0.367 | 0.316–0.413 | 0.227 |
+| *mexicana* | 0.0205 | 0.304 | 0.255–0.356 | 0.197 |
+| *parviglumis* | 0.0226 | 0.295 | 0.245–0.341 | 0.194 |
 
 Genome-wide π reproduces the expected domestication bottleneck: maize carries roughly half
 the diversity of either teosinte.
 
-π by recombination decile, from the lowest decile (median 0.04 cM/Mb) to the highest
-(median 2.92 cM/Mb):
+π by recombination decile, from the lowest decile (median 0.03 cM/Mb) to the highest
+(median 3.38 cM/Mb):
 
 | Population | Lowest decile | Highest decile | Fold change |
 |------------|---------------|----------------|-------------|
-| maize | 0.00714 | 0.01776 | 2.49× |
-| *mexicana* | 0.01394 | 0.02712 | 1.95× |
-| *parviglumis* | 0.01556 | 0.02866 | 1.84× |
+| maize | 0.00709 | 0.01817 | 2.56× |
+| *mexicana* | 0.01375 | 0.02813 | 2.05× |
+| *parviglumis* | 0.01599 | 0.02966 | 1.85× |
 
 ![π vs recombination rate](results/pi_vs_recombination.png)
 
@@ -193,11 +193,11 @@ autocorrelation structure.
 
 **Shared chromosome-scale structure.** Recombination rate, gene density, and π all covary
 with distance to the centromere. Controlling for gene density and centromere distance
-roughly halves the correlation (maize 0.332 → 0.170). A substantial independent
-association survives, but half the raw signal is shared large-scale structure.
+reduces the correlation by roughly 35–40% (maize 0.367 → 0.227). A substantial independent
+association survives, but over a third of the raw signal is shared large-scale structure.
 
 **Ascertainment.** Callable-site density is itself correlated with recombination rate
-(ρ ≈ −0.28): high-recombination windows have *fewer* alignable sites, plausibly because
+(ρ ≈ −0.29): high-recombination windows have *fewer* alignable sites, plausibly because
 diverse distal regions carry more indels and structural variation. This runs in a
 conservative direction — if ascertainment favors conserved, low-π sequence precisely where
 rate is highest, it biases π downward there and understates the positive correlation.

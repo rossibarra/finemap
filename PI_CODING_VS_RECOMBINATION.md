@@ -241,10 +241,10 @@ than reshaping the sample. Going higher trades windows for precision quickly, es
 `--min-sites-4d 500` would discard four fifths of windows and strongly favour the most gene-dense
 ones.
 
-The result is not sensitive to the cutoff. Spearman ρ for maize π<sub>4D</sub> is 0.336
-(≥ 20 sites), 0.349 (≥ 100), 0.367 (≥ 200) and 0.408 (≥ 500); the modest increase is the
+The result is not sensitive to the cutoff. Spearman ρ for maize π<sub>4D</sub> is 0.381
+(≥ 20 sites), 0.397 (≥ 100), 0.418 (≥ 200) and 0.461 (≥ 500); the modest increase is the
 expected attenuation of noise, not a change in sign or story. The same holds for 0D
-(0.266 → 0.325 across the same span) and for the 0D/4D ratio (−0.015 → −0.024 in maize).
+(0.297 → 0.333 across the same span) and for the 0D/4D ratio (−0.027 → −0.037 in maize).
 
 ## Results
 
@@ -255,30 +255,30 @@ ratio (both classes pass and π<sub>4D</sub> > 0).
 
 | Population | π<sub>0D</sub> | Spearman ρ | 95% CI | Partial ρ |
 |------------|----------------|------------|--------|-----------|
-| maize | 0.0034 | 0.271 | 0.238–0.306 | 0.187 |
-| *mexicana* | 0.0053 | 0.205 | 0.171–0.235 | 0.147 |
-| *parviglumis* | 0.0054 | 0.187 | 0.154–0.219 | 0.140 |
+| maize | 0.0034 | 0.302 | 0.270–0.334 | 0.220 |
+| *mexicana* | 0.0053 | 0.238 | 0.206–0.268 | 0.182 |
+| *parviglumis* | 0.0054 | 0.220 | 0.189–0.249 | 0.174 |
 
 **π at 4-fold degenerate sites** (synonymous proxy):
 
 | Population | π<sub>4D</sub> | Spearman ρ | 95% CI | Partial ρ |
 |------------|----------------|------------|--------|-----------|
-| maize | 0.0108 | 0.349 | 0.309–0.383 | 0.270 |
-| *mexicana* | 0.0146 | 0.301 | 0.258–0.340 | 0.234 |
-| *parviglumis* | 0.0158 | 0.293 | 0.254–0.330 | 0.243 |
+| maize | 0.0108 | 0.397 | 0.361–0.430 | 0.331 |
+| *mexicana* | 0.0146 | 0.356 | 0.318–0.391 | 0.303 |
+| *parviglumis* | 0.0158 | 0.347 | 0.311–0.383 | 0.310 |
 
 π<sub>4D</sub> is close to the all-sites estimate for each population (0.0124 / 0.0205 / 0.0226
 genome-wide), while π<sub>0D</sub> is roughly a third of it — the expected footprint of purifying
 selection on replacement sites. The domestication bottleneck is visible in both classes: maize
 carries about two thirds of teosinte diversity at 4D sites.
 
-π by recombination decile, lowest (median 0.05 cM/Mb) to highest (median 3.31 cM/Mb):
+π by recombination decile, lowest (median 0.04 cM/Mb) to highest (median 3.87 cM/Mb at 0D, 3.99 at 4D):
 
 | Population | 0D lowest | 0D highest | Fold | 4D lowest | 4D highest | Fold |
 |------------|-----------|------------|------|-----------|------------|------|
-| maize | 0.00263 | 0.00411 | 1.56× | 0.00636 | 0.01425 | 2.24× |
-| *mexicana* | 0.00327 | 0.00649 | 1.98× | 0.00876 | 0.01862 | 2.13× |
-| *parviglumis* | 0.00379 | 0.00605 | 1.60× | 0.01004 | 0.01932 | 1.92× |
+| maize | 0.00262 | 0.00416 | 1.59× | 0.00592 | 0.01460 | 2.47× |
+| *mexicana* | 0.00339 | 0.00663 | 1.95× | 0.00827 | 0.01905 | 2.30× |
+| *parviglumis* | 0.00395 | 0.00646 | 1.63× | 0.00960 | 0.01983 | 2.07× |
 
 ![π at 0D and 4D sites vs recombination rate](results/pi_coding_vs_recombination.png)
 
@@ -294,17 +294,17 @@ haplotypes this difference should not be pushed hard.
 
 | Population | π<sub>0D</sub>/π<sub>4D</sub> | Spearman ρ vs rate | 95% CI | Partial ρ | Lowest decile | Highest decile |
 |------------|-------------------------------|--------------------|--------|-----------|---------------|----------------|
-| maize | 0.310 | −0.021 | −0.041 to −0.001 | −0.038 | 0.388 | 0.285 |
-| *mexicana* | 0.358 | −0.031 | −0.056 to −0.005 | −0.033 | 0.355 | 0.354 |
-| *parviglumis* | 0.338 | −0.050 | −0.074 to −0.026 | −0.055 | 0.362 | 0.315 |
+| maize | 0.310 | −0.036 | −0.056 to −0.015 | −0.064 | 0.417 | 0.286 |
+| *mexicana* | 0.358 | −0.044 | −0.070 to −0.019 | −0.056 | 0.386 | 0.350 |
+| *parviglumis* | 0.338 | −0.063 | −0.086 to −0.040 | −0.079 | 0.390 | 0.320 |
 
 ![π0D/π4D vs recombination rate](results/pi_coding_vs_recombination_ratio.png)
 
 The ratio does decline with recombination, in the predicted direction, in all three populations,
-and the bootstrap interval excludes zero in all three. But the effect is **an order of magnitude
-weaker than the raw π–rate correlations** (|ρ| ≈ 0.02–0.05 against 0.19–0.35) and the decile
-trend is non-monotonic, with a conspicuous high point in the lowest deciles and a dip near
-1.2 cM/Mb. Read honestly: this is a weak signal that is consistent with more efficient purifying
+and the bootstrap interval excludes zero in all three. But the effect is **roughly six to ten times
+weaker than the raw π–rate correlations** (|ρ| ≈ 0.04–0.06 against 0.22–0.40) and the decile
+trend is non-monotonic, with a conspicuous high point in the lowest decile and an uneven
+plateau above it. Read honestly: this is a weak signal that is consistent with more efficient purifying
 selection in high-recombination regions, not a demonstration of it. Most of what drives π up with
 recombination is shared between 0D and 4D sites and therefore cancels in the ratio, which is
 precisely why the ratio is the interpretable quantity and also why it is small.
@@ -334,19 +334,20 @@ On the matched set:
 | | Spearman ρ | | | log-log slope | | |
 |---|---|---|---|---|---|---|
 | **class** | maize | *mexicana* | *parviglumis* | maize | *mexicana* | *parviglumis* |
-| 4D | **0.362** | **0.313** | **0.307** | 0.21 | 0.19 | 0.17 |
-| 0D | 0.297 | 0.235 | 0.220 | 0.18 | 0.16 | 0.15 |
-| all sites | 0.276 | 0.205 | 0.200 | 0.20 | 0.10 | 0.09 |
+| 4D | **0.412** | **0.369** | **0.362** | 0.22 | 0.21 | 0.19 |
+| 0D | 0.329 | 0.270 | 0.254 | 0.19 | 0.17 | 0.16 |
+| all sites | 0.315 | 0.244 | 0.246 | 0.21 | 0.11 | 0.10 |
 
-**4D exceeds 0D in every population**, and the gap widens on matched windows (0.064 /
-0.078 / 0.086) relative to the separate analyses. This is the central result: neutral
+**4D exceeds 0D in every population** on matched windows (gap 0.083 / 0.099 / 0.109),
+slightly narrower than in the separate analyses (0.096 / 0.118 / 0.128) but of the same sign
+and similar size. This is the central result: neutral
 sites retain the signature of linked selection, while 0D diversity is already suppressed
 by direct purifying selection whatever the local rate.
 
-All sites ranks last here, which is not a contradiction of the 0.332 reported in
+All sites ranks last here, which is not a contradiction of the 0.367 reported in
 [PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md). The matched set is by construction the
 gene-containing subset of the genome — distal, high-recombination windows — so the
-recombination range is compressed and every correlation computed on it shrinks. Use 0.332
+recombination range is compressed and every correlation computed on it shrinks. Use 0.367
 for all sites genome-wide and the table above only for comparing classes.
 
 Two features are visible only on log axes:
@@ -355,8 +356,8 @@ Two features are visible only on log axes:
   ~0.5 cM/Mb" seen on a linear x-axis is largely the shape of the rate distribution. The
   relationship is nearer a power law than a saturating one, as expected if diversity
   scales with *N*e·r.
-- **Maize is the outlier at all sites** (slope 0.20 vs 0.10 and 0.09) but not in the coding
-  classes (0.21 vs 0.19 and 0.17). Maize's steeper all-sites response therefore comes from
+- **Maize is the outlier at all sites** (slope 0.21 vs 0.11 and 0.10) but not in the coding
+  classes (0.22 vs 0.21 and 0.19). Maize's steeper all-sites response therefore comes from
   non-coding sequence rather than from genes — possibly the domestication bottleneck acting
   where background selection is weaker, possibly a difference in what aligns in maize
   versus the teosintes. Unresolved.
@@ -373,15 +374,15 @@ no asymptotic p-value is reported.
 
 **Gene density is the central confounder here.** 0D and 4D sites exist only in genes, gene
 density rises toward the chromosome arms, and so does recombination rate. Controlling for gene
-density and centromere distance shrinks the correlations by roughly a third (maize 4D
-0.349 → 0.270; maize 0D 0.271 → 0.187) — less than the halving seen in the all-sites analysis,
+density and centromere distance shrinks the correlations by roughly a sixth to a quarter (maize 4D
+0.397 → 0.331; maize 0D 0.302 → 0.220) — less than the 35–40% reduction seen in the all-sites analysis,
 but the residual association is still not free of shared chromosome-scale structure. For the
-ratio, conditioning barely changes anything (maize −0.021 → −0.038), as expected for a quantity
-in which gene-density effects largely cancel.
+ratio, conditioning strengthens rather than weakens the association (maize −0.036 → −0.064), so
+the ratio's decline is not a by-product of gene density.
 
 **Ascertainment runs the other way from the all-sites analysis.** There, callable-site density
-was *negatively* correlated with rate (ρ ≈ −0.28). Here it is *positively* correlated
-(ρ ≈ +0.36 for both classes), because coding sequence is both more alignable and more abundant
+was *negatively* correlated with rate (ρ ≈ −0.29). Here it is *positively* correlated
+(ρ ≈ +0.39–0.40 for both classes), because coding sequence is both more alignable and more abundant
 in high-recombination regions. That is not conservative: any tendency for windows with more
 callable coding sites to yield better-estimated (or systematically different) π is aligned with
 the rate axis rather than opposed to it. The ratio is again the more robust statistic, since 0D

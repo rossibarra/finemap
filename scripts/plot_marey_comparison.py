@@ -44,8 +44,8 @@ def load_centromeres():
 def lift_ogut():
     ogut = pd.read_csv(OGUT_V2)
     # CrossMap expects BED: chr start end name
-    # Ogut positions are in AGPv2 (bare numbers); v2v5.chain also uses bare numbers
-    ogut["chr_str"] = ogut["chromosome"].astype(str)
+    # Ogut positions are in AGPv2 (bare numbers); v2v5.chain names AGPv2 as Chr1..Chr10
+    ogut["chr_str"] = "Chr" + ogut["chromosome"].astype(str)
     ogut["end"] = ogut["position"] + 1
 
     with tempfile.NamedTemporaryFile(suffix=".bed", mode="w", delete=False) as fh:
@@ -66,7 +66,8 @@ def lift_ogut():
     lifted = pd.read_csv(
         tmp_out, sep="\t", header=None, names=["chr_v5", "start_v5", "end_v5", "SNP_newID"]
     )
-    # chain already outputs Chr1..Chr10; keep as-is
+    # CrossMap may emit bare numbers or chr1..chr10; normalize to Chr1..Chr10
+    lifted["chr_v5"] = "Chr" + lifted["chr_v5"].astype(str).str.replace(r"^[Cc]hr", "", regex=True)
     merged = ogut[["SNP_newID", "chromosome", "cM"]].merge(lifted, on="SNP_newID", how="inner")
     # Shift cM per chromosome so min = 0
     merged["cM_norm"] = merged.groupby("chromosome")["cM"].transform(lambda x: x - x.min())
