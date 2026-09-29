@@ -15,9 +15,12 @@ direction. All maps and downstream analyses are rebuilt; the v4 → v5 lift-over
 - Rebuild `data/finemap_v5.bed` (193,790 segments), `data/hapmap/`,
   `data/finemap_hierarchical_v5.bed`, and the hotspot BEDs (918 at 30×, 757 at
   1 kb/20×).
-- Regenerate `data/ogut_v5.csv` (5,837 → 6,136 markers); it now agrees with an
-  independent v2 → v4 → v5 lift of the Ogut map to within 10 kb for 98% of
-  shared markers. `scripts/plot_marey_comparison.py` writes `Chr`-prefixed
+- Regenerate `data/ogut_v5.csv` and add `scripts/verify_ogut_v5.py`, which
+  checks each lifted marker against the AGPv2 and v5 sequence. Markers without
+  sequence support at their v5 position are dropped (6,136 lifted → 5,894 kept,
+  including 34 of the 35 that were out of cM order). The sequence check also
+  shows that an independent v2 → v4 → v5 lift of the Ogut map misplaces about
+  40% of markers. `scripts/plot_marey_comparison.py` writes `Chr`-prefixed
   input for the new chain.
 - Rerun the recombination, hotspot, π and gene-coverage analyses and update
   their numbers in the README and PI_*.md writeups. Correlations of π with

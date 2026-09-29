@@ -11,7 +11,7 @@ The old `data/v2v5.chain` actually converted v5 → AGPv2, so the AGPv2 crossove
 ## Documentation / reproducibility
 
 - **The README's Step 3 command doesn't reproduce `jri_v5.bed`.** It concatenates the Samayoa `_v5.bed` files, which have 4 columns and no ID, but `jri_v5.bed` has 5 columns with `LRv4_`/`TEOv4_` IDs. The script or command that assigned those IDs is not documented. For this rebuild, the v4 rows were kept verbatim from the previous `jri_v5.bed`. A fresh CrossMap lift reproduced their coordinates exactly (263,858 of 263,858).
-- **The `finemap` conda env lacks `openpyxl`**, even though `environment.yml` lists it. Step 1 (`scripts/hmm_co_pipeline.py`) was run with base Anaconda Python instead. Rebuild or update the env.
+- **Resolved: the `finemap` conda env was missing `openpyxl`**, even though `environment.yml` listed it. openpyxl 3.1.5 has now been installed into the env.
 - **Three numbers in the PI writeups could not be reproduced, even from the old files:**
   - PI_VS_HOTSPOT_DISTANCE "3.1% of cM from intervals <100 bp"
   - PI_VS_HOTSPOT_DISTANCE masked/unmasked ρ "−0.755 / 1.000"
@@ -24,8 +24,11 @@ The old `data/v2v5.chain` actually converted v5 → AGPv2, so the AGPv2 crossove
 - **`data/ogut_v5.csv` and the independent `ogutweird/` hapmaps differ slightly.** `ogut_v5.csv` comes from a direct AnchorWave v2 → v5 lift; `ogutweird/` was built via v2 → v4 → v5.
   - **Agreement:** 5,683 markers are shared. Of these, 59% have identical positions, 98% are within 10 kb and 99.5% within 100 kb.
   - **Unshared markers:** 745 markers appear only in the hapmap and 453 only in `ogut_v5.csv`.
-  - **Can't tell which is closer:** every disagreeing marker falls between the same flanking agreed markers under both liftovers. A base-level check would need the AGPv2 reference.
-- **35 markers in `ogut_v5.csv` are out of cM order along v5.** The hapmap is fully ordered, so they were probably removed there. Consider filtering them.
+  - **Resolved: `ogut_v5.csv` is the correct one.** The check used the AGPv2 reference (`data/B73_RefGen_v2.fa.gz`, MaizeGDB, not tracked). For each marker, the 101 bp around its v2 position was searched for within ±300 bp of each candidate v5 position, on both strands.
+    - **Across all 5,683 shared markers:** the v2 sequence sits exactly at the `ogut_v5.csv` position for 97.3%, and at the ogutweird position for 58.7%.
+    - **Where the two disagree (2,305 markers):** `ogut_v5.csv` alone is exact for 2,196, ogutweird alone for 5, both for 11 and neither for 93. The median mismatch at ogutweird's positions is 59 of 101 bp, i.e. no match.
+    - **Conclusion:** the v2 → v4 → v5 route used for ogutweird misplaces about 40% of markers by bp to kb.
+- **242 of 6,136 markers in `ogut_v5.csv` (3.9%) lack sequence support at their position.** In 38 of these, the sequence turns up nearby but shifted; the rest have no match within ±300 bp. This includes 34 of the 35 markers that are out of cM order along v5, so those are lift-over errors. **Resolved:** these markers are now dropped with `scripts/verify_ogut_v5.py --filter`, leaving 5,894 markers, all in cM order.
 - **The corrected map fits the Ogut Marey curve worse on chr1, chr2 and chr7** (RMSE 2.6→2.8, 3.4→5.1 and 3.0→5.5 cM), though it fits better on the other seven. This is worth a look for local problems, e.g. rearrangements between AGPv2 and v5.
 
 ## Lift-over quality
