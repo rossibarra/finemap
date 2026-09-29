@@ -86,7 +86,7 @@ remainders), contiguous from position 0 with no gaps. Measuring π on exactly th
 the map is defined on avoids any interpolation between the two variables.
 
 The smoothed hierarchical map is the right choice here rather than `data/finemap_v5.bed`:
-the interval-density map has 193,790 variable-width intervals, many only a few bp wide,
+the interval-density map has 262,448 variable-width intervals, many only a few bp wide,
 which are far too small to hold enough callable sites for a π estimate.
 
 Note that the BED uses `Chr1` while the VCFs use `chr1`; `--lowercase-chrom` reconciles

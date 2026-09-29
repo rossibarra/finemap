@@ -46,12 +46,13 @@ def lift_ogut():
     # CrossMap expects BED: chr start end name
     # Ogut positions are in AGPv2 (bare numbers); v2v5.chain names AGPv2 as Chr1..Chr10
     ogut["chr_str"] = "Chr" + ogut["chromosome"].astype(str)
-    ogut["end"] = ogut["position"] + 1
+    # Positions are 1-based; BED is 0-based half-open, so the marker is [position-1, position)
+    ogut["start"] = ogut["position"] - 1
 
     with tempfile.NamedTemporaryFile(suffix=".bed", mode="w", delete=False) as fh:
         tmp_in = fh.name
         for _, row in ogut.iterrows():
-            fh.write(f"{row.chr_str}\t{row.position}\t{row.end}\t{row.SNP_newID}\n")
+            fh.write(f"{row.chr_str}\t{row.start}\t{row.position}\t{row.SNP_newID}\n")
 
     tmp_out = tmp_in.replace(".bed", "_v5.bed")
     crossmap = subprocess.run(["which", "CrossMap"], capture_output=True, text=True).stdout.strip()
@@ -68,6 +69,8 @@ def lift_ogut():
     )
     # CrossMap may emit bare numbers or chr1..chr10; normalize to Chr1..Chr10
     lifted["chr_v5"] = "Chr" + lifted["chr_v5"].astype(str).str.replace(r"^[Cc]hr", "", regex=True)
+    # Back to a 1-based position
+    lifted["start_v5"] = lifted["start_v5"] + 1
     merged = ogut[["SNP_newID", "chromosome", "cM"]].merge(lifted, on="SNP_newID", how="inner")
     # Shift cM per chromosome so min = 0
     merged["cM_norm"] = merged.groupby("chromosome")["cM"].transform(lambda x: x - x.min())

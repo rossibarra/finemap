@@ -53,8 +53,7 @@ def build_finemap(jri, chr_cM):
 
         target_cM = chr_cM.get(chrom)
         if target_cM is None:
-            print(f"Warning: no Ogut cM for {chrom}", file=sys.stderr)
-            continue
+            raise SystemExit(f"ERROR: no Ogut cM target for {chrom}; check chromosome names in {JRI.name}")
 
         total_mass = sum((e - s) * w for s, e, w in merged)
         scale = target_cM / total_mass

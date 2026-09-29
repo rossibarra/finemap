@@ -169,8 +169,7 @@ def main():
     records = []
     for chrom in sorted(jri["chr"].unique(), key=lambda value: int(value[3:])):
         if chrom not in targets or chrom not in lengths:
-            print(f"Skipping {chrom}: missing length or Ogut target", file=sys.stderr)
-            continue
+            raise SystemExit(f"ERROR: {chrom} has no Ogut target or v5 length; check chromosome names")
         subset = jri[jri["chr"] == chrom]
         starts = subset["start"].to_numpy(dtype=np.int64)
         ends = subset["end"].to_numpy(dtype=np.int64)

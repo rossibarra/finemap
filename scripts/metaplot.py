@@ -1,4 +1,31 @@
 #!/usr/bin/env python3
+"""Build a TSS/TTS metaplot from GFF gene annotations and a signal BED.
+
+Each gene contributes one value per bin; the plotted line is the unweighted mean of
+those per-gene values across genes (+/- 1 SE), with minus-strand genes reversed so
+that bins always read 5' -> 3'.
+
+How a bin's per-gene value is computed from the BED depends on the mode:
+
+* default (midpoint): sum of the values of intervals whose midpoint falls in the bin.
+  Suited to point-like counts (peaks, crossover calls, simulated regions).
+* ``--uniform --uniform-mode mean`` (default for --uniform): overlap-weighted mean of
+  a *rate* column, e.g. cM/Mb (column 6 of data/finemap_v5.bed):
+
+      value = sum(rate_i * overlap_bp_i) / sum(overlap_bp_i)
+
+  The denominator is the bp of the bin covered by input intervals, not the full bin
+  width. Uncovered bp (map gaps, chromosome ends) are ignored rather than treated as
+  zero rate, and a bin with no covered bp is skipped for that gene (it does not add a
+  zero, nor count toward "Genes contributing"). The result is in the input's own units
+  and does not depend on how a constant rate is split into segments.
+* ``--uniform --uniform-mode total``: the previous behaviour. Each interval's value is
+  treated as an interval total (e.g. a count or a cM length) and apportioned to the
+  bin by overlap_bp / interval_length, then summed. Bins with no overlap add 0.
+  Do not use this for rate columns: it scales a rate by overlap/segment length.
+
+Run ``metaplot.py --self-test`` to check the uniform aggregation on synthetic data.
+"""
 
 import argparse
 import sys
@@ -17,13 +44,14 @@ INTERNAL_GAP_BINS = 5
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Build a TSS/TTS metaplot from GFF gene annotations and a signal BED."
+        description="Build a TSS/TTS metaplot from GFF gene annotations and a signal BED. "
+        "Run with --self-test (no other arguments) to check the --uniform aggregation."
     )
     parser.add_argument("--gff", required=True, help="Gene annotation GFF/GFF3 file.")
     parser.add_argument(
         "--input",
         required=True,
-        help="Signal BED file. Midpoints are assigned to bins; missing or non-numeric column 4 is treated as 1.",
+        help="Signal BED file. Midpoints are assigned to bins unless --uniform is set; missing or non-numeric values are treated as 1.",
     )
     parser.add_argument(
         "--value-column",
@@ -52,7 +80,18 @@ def parse_args():
     parser.add_argument(
         "--uniform",
         action="store_true",
-        help="Distribute each interval's value uniformly across its full span instead of assigning it to its midpoint.",
+        help="Use each interval's full span instead of its midpoint. How the value is "
+        "combined is set by --uniform-mode.",
+    )
+    parser.add_argument(
+        "--uniform-mode",
+        choices=["mean", "total"],
+        default="mean",
+        help="With --uniform: 'mean' (default) treats the value as a rate (e.g. cM/Mb) and "
+        "reports the overlap-weighted mean over bp covered by the input, "
+        "sum(rate*overlap)/sum(overlap); bins with no coverage are skipped for that gene. "
+        "'total' treats the value as an interval total (count, cM) and sums "
+        "value*overlap/interval_length.",
     )
     parser.add_argument(
         "--output",
@@ -69,21 +108,21 @@ def parse_args():
         action="store_true",
         help="Write the plot without opening an interactive window.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.bin_size <= 0:
+        raise SystemExit("--bin-size must be > 0")
+    if args.flanking_bp < 0:
+        raise SystemExit("--flanking-bp must be >= 0")
+    if args.flanking_bp % args.bin_size != 0:
+        raise SystemExit("--flanking-bp must be divisible by --bin-size")
+    if args.body_bins <= 0:
+        raise SystemExit("--body-bins must be > 0")
+    if args.value_column < 4:
+        raise SystemExit("--value-column must be 4 or greater")
+    return args
 
 
-ARGS = parse_args()
-
-if ARGS.bin_size <= 0:
-    raise SystemExit("--bin-size must be > 0")
-if ARGS.flanking_bp < 0:
-    raise SystemExit("--flanking-bp must be >= 0")
-if ARGS.flanking_bp % ARGS.bin_size != 0:
-    raise SystemExit("--flanking-bp must be divisible by --bin-size")
-if ARGS.body_bins <= 0:
-    raise SystemExit("--body-bins must be > 0")
-if ARGS.value_column < 4:
-    raise SystemExit("--value-column must be 4 or greater")
+ARGS = None  # set in main()
 
 
 def normalize_chrom_name(value):
@@ -197,39 +236,50 @@ def midpoint_sum(chrom_signal, window_start, window_end):
     return float(values[left:right].sum())
 
 
-def uniform_sum(chrom_signal, window_start, window_end):
+def window_overlaps(chrom_signal, window_start, window_end):
+    """Return (starts, ends, values, overlap_bp) for intervals overlapping the window."""
     starts = chrom_signal["start"]
     ends = chrom_signal["end"]
     values = chrom_signal["value"]
     right = np.searchsorted(starts, window_end, side="left")
-    if right == 0:
-        return 0.0
     starts = starts[:right]
     ends = ends[:right]
     values = values[:right]
-    valid = ends > window_start
-    if not np.any(valid):
-        return 0.0
-    starts = starts[valid]
-    ends = ends[valid]
-    values = values[valid]
     overlap = np.minimum(ends, window_end) - np.maximum(starts, window_start)
     positive = overlap > 0
-    if not np.any(positive):
+    return starts[positive], ends[positive], values[positive], overlap[positive]
+
+
+def uniform_sum(chrom_signal, window_start, window_end):
+    """Interval-total semantics: sum(value * overlap / interval_length). 0 if no overlap."""
+    starts, ends, values, overlap = window_overlaps(chrom_signal, window_start, window_end)
+    if overlap.size == 0:
         return 0.0
-    lengths = np.maximum(1, ends[positive] - starts[positive]).astype(np.float64)
-    return float(np.sum(values[positive] * overlap[positive] / lengths))
+    lengths = np.maximum(1, ends - starts).astype(np.float64)
+    return float(np.sum(values * overlap / lengths))
+
+
+def uniform_mean(chrom_signal, window_start, window_end):
+    """Rate semantics: sum(rate * overlap) / covered bp. None if the window is uncovered."""
+    _, _, values, overlap = window_overlaps(chrom_signal, window_start, window_end)
+    covered = overlap.sum()
+    if covered <= 0:
+        return None
+    return float(np.sum(values * overlap) / covered)
 
 
 def add_window(signal_dict, chrom, slot, window_start, window_end, sums, sumsq, counts):
     chrom_signal = signal_dict.get(chrom)
     if chrom_signal is None:
         return
+    if ARGS.uniform and ARGS.uniform_mode == "mean":
+        value = uniform_mean(chrom_signal, window_start, window_end)
+        if value is None:
+            return
+    elif ARGS.uniform:
+        value = uniform_sum(chrom_signal, window_start, window_end)
     else:
-        if ARGS.uniform:
-            value = uniform_sum(chrom_signal, window_start, window_end)
-        else:
-            value = midpoint_sum(chrom_signal, window_start, window_end)
+        value = midpoint_sum(chrom_signal, window_start, window_end)
     sums[slot] += value
     sumsq[slot] += value * value
     counts[slot] += 1
@@ -413,7 +463,10 @@ def build_plot(averages, ses, counts):
     ax.axvspan(gap_start - 0.5, gap_end - 0.5, color="#d9d9d9", alpha=0.6, zorder=0)
     ax.axvline(gap_start - 0.5, linestyle=":", linewidth=1, color="gray")
     ax.axvline(gap_end - 0.5, linestyle=":", linewidth=1, color="gray")
-    ax.set_ylabel("Average signal")
+    if ARGS.uniform and ARGS.uniform_mode == "mean":
+        ax.set_ylabel("Mean rate (input units)")
+    else:
+        ax.set_ylabel("Average signal")
     ax.set_title(ARGS.title)
 
     ax_count.bar(x, counts, width=1.0, color="#8da0cb", edgecolor="none")
@@ -484,15 +537,62 @@ def build_plot(averages, ses, counts):
     return fig
 
 
-GENES = load_genes(ARGS.gff)
-SIGNAL = load_signal(ARGS.input)
-GENE_LAYOUT = prepare_genes(GENES)
-SIGNAL_DICT = build_signal_dict(SIGNAL)
-AVERAGES, SES, COUNTS = aggregate_profiles(GENE_LAYOUT, SIGNAL_DICT)
+def self_test():
+    """Check uniform aggregation on synthetic intervals; exits non-zero on failure."""
 
-FIG = build_plot(AVERAGES, SES, COUNTS)
-FIG.savefig(ARGS.output, bbox_inches="tight")
-if not ARGS.no_show:
-    plt.show()
-else:
-    plt.close(FIG)
+    def track(starts, ends, values):
+        return {
+            "start": np.asarray(starts, dtype=np.int64),
+            "end": np.asarray(ends, dtype=np.int64),
+            "value": np.asarray(values, dtype=np.float64),
+        }
+
+    # A constant rate of 2 over [0, 1000) split three different ways.
+    splits = [
+        track([0], [1000], [2.0]),
+        track([0, 100], [100, 1000], [2.0, 2.0]),
+        track([0, 37, 150, 620], [37, 150, 620, 1000], [2.0] * 4),
+    ]
+    for window in [(0, 100), (50, 150), (900, 1000), (0, 1000)]:
+        got = [uniform_mean(t, *window) for t in splits]
+        assert np.allclose(got, 2.0), (window, got)
+
+    # Overlap-weighted: 30 bp at rate 1 + 70 bp at rate 4 -> 3.1.
+    mixed = track([0, 30], [30, 200], [1.0, 4.0])
+    assert np.isclose(uniform_mean(mixed, 0, 100), 3.1)
+
+    # Covered-bp denominator: half-covered bin reports the covered rate, not half of it.
+    partial = track([50], [1000], [2.0])
+    assert np.isclose(uniform_mean(partial, 0, 100), 2.0)
+    assert uniform_mean(partial, -100, 0) is None
+
+    # 'total' mode keeps interval-total semantics (apportion by overlap / length).
+    assert np.isclose(uniform_sum(splits[0], 0, 100), 0.2)
+    assert np.isclose(uniform_sum(splits[1], 0, 100), 2.0)
+    assert uniform_sum(partial, -100, 0) == 0.0
+    print("metaplot self-test passed")
+
+
+def main():
+    global ARGS
+    if "--self-test" in sys.argv[1:]:
+        self_test()
+        return
+    ARGS = parse_args()
+    genes = load_genes(ARGS.gff)
+    signal = load_signal(ARGS.input)
+    gene_layout = prepare_genes(genes)
+    signal_dict = build_signal_dict(signal)
+    averages, ses, counts = aggregate_profiles(gene_layout, signal_dict)
+
+    fig = build_plot(averages, ses, counts)
+    fig.savefig(ARGS.output, bbox_inches="tight")
+    if not ARGS.no_show:
+        plt.show()
+    else:
+        plt.close(fig)
+    return averages, ses, counts
+
+
+if __name__ == "__main__":
+    main()
