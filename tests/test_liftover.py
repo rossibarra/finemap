@@ -49,6 +49,38 @@ class LiftTests(unittest.TestCase):
         self.assertEqual(kept['gap'], (1, 0, 520))
         self.assertTrue(audit.rstrip().endswith('\t1'))
 
+    def cross_chain(self, dest_start, ratio=(0.5, 2.0)):
+        """Source 1..80 (80 bp): left end on chain 1 -> 100, right end on chain 2 -> dest_start+19."""
+        chain = ('chain 1 1 100 + 0 20 chr1 1000 + 100 120 1\n20\n\n'
+                 f'chain 1 1 100 + 60 80 chr1 1000 + {dest_start} {dest_start + 20} 2\n20\n')
+        with tempfile.TemporaryDirectory(prefix='finemap-lift-') as directory:
+            work = Path(directory)
+            path = work / 'test.chain'
+            path.write_text(chain)
+            audit = io.StringIO()
+            kept = lift_endpoints([('1', 1, 80, 's', 'x')], path, work, 'test',
+                                  csv.writer(audit, delimiter='\t'), ratio)
+            return kept, audit.getvalue()
+
+    def test_cross_chain_ratio_bounds_are_inclusive(self):
+        # lifted length = dest_start - 80; source length 80
+        for dest_start, expected in ((120, 0.5), (240, 2.0)):
+            kept, audit = self.cross_chain(dest_start)
+            self.assertEqual(kept, {'x': (1, 100, dest_start + 20)})
+            self.assertIn('kept_cross_chain', audit)
+            self.assertAlmostEqual(float(audit.split('\t')[9]), expected)
+
+    def test_cross_chain_outside_ratio_rejected(self):
+        for dest_start in (119, 241):
+            kept, audit = self.cross_chain(dest_start)
+            self.assertFalse(kept)
+            self.assertIn('different_chain_length', audit)
+
+    def test_cross_chain_rejected_when_same_chain_only(self):
+        kept, audit = self.cross_chain(160, ratio=None)
+        self.assertFalse(kept)
+        self.assertIn('different_chain_length', audit)
+
     def test_block_end_is_exclusive(self):
         chain = 'chain 1 1 100 + 0 20 chr1 1000 + 100 120 1\n20\n'
         kept, audit = self.run_lift(chain, [('1', 20, 21, 's', 'gap')])

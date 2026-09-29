@@ -1,47 +1,144 @@
-# Review: outstanding concerns after the v2 → v5 lift-over fix (2026-09-28)
+# Remaining review findings after the September 2026 fixes
 
-The old `data/v2v5.chain` actually converted v5 → AGPv2, so the AGPv2 crossover data (Rodgers-Melnick and European) and the Ogut markers were lifted in the wrong direction. The chain has been inverted (`scripts/swap_chain.py`, old file kept as `data/v5v2.chain`). `jri_v5.bed`, both maps, the hapmaps, the hotspots, `ogut_v5.csv`, and the downstream analyses were then rebuilt (see CHANGELOG 0.4). The items below are still open.
+Reviewed 2026-09-29 against commit `1e7a00a`. The coordinate corrections,
+observation-supported HMM intervals, marker-filter fixes, metaplot rate semantics,
+VCF FORMAT parsing, resolution calculation, physical bootstrap blocks and hierarchical
+optimizer have meaningful regression coverage. Nineteen targeted tests and the metaplot
+self-test pass. The items below remain.
 
-## Stale or unregenerated outputs
+## Status (2026-09-29, after this review)
 
-- **`results/finemap-map-comparison*.png` are stale.** They were made from the old maps, and no script in the repo generates them (they came from an HTML artifact). Regenerate or delete them.
-- **`data/example1-4.bed` were not regenerated.** `scripts/simulate_example_regions.py` samples crossover interval lengths from `jri_v5.bed` at random, so these files still reflect the old interval set. The effect is probably minor, but they are out of date.
-- **`scripts/plot_rate_along_chromosomes.py` was not rerun.** Its output (`results/rate_along_chromosomes.png`) is neither tracked nor referenced. It reads `ogut_v5.csv` and the maps, so rerun it if the figure is needed.
+- **§1 — addressed.** The whole dependency chain was rebuilt in order: HMM (32,548 events), `build_jri_v5.py` (402,018 intervals), both maps (261,395 and 21,325 segments), hapmaps, hotspots (925 at 30×, 781 at 1 kb/20×), every downstream analysis, and the simulated examples and their metaplots. `scripts/check_release.py` passes, and `data/provenance_manifest.json` records the content hashes. Rejecting inversion-spanning intervals also cut the Ogut Marey RMSE on chr2 and chr7 from 5.1 and 5.5 cM to 1.7 and 1.8 cM. No conclusion in the analysis writeups changed.
+- **§2 — addressed.** Every rule was compared on source retention and on the 100 kb hierarchical rate profile:
 
-## Documentation / reproducibility
+  | Rule | Intervals | 100 kb bins differing by >10% from the current rule | log-rate r |
+  |---|---:|---:|---:|
+  | Same chain only | 390,783 | 17.5% | 0.980 |
+  | Cross-chain allowed, ratio 0.5–2 (**chosen**) | 402,018 | — | — |
+  | Cross-chain allowed, ratio 0.1–10 | 402,300 | 0.8% | 0.9997 |
 
-- **Resolved: the README's Step 2/3 commands didn't reproduce `jri_v5.bed`.** They wrote bare chromosome numbers for the Samayoa data, which `build_finemap.py` then silently skipped, and never assigned the `LRv4_`/`TEOv4_` IDs. `scripts/build_jri_v5.py` now does the whole conversion with validation and reproduces the tracked files. The map builders now stop with an error on a chromosome with no Ogut target.
-- **Resolved: the recombination metaplot measured the wrong quantity.** `metaplot.py --uniform` divided each rate by its segment length, so values depended on the segmentation. It now uses an overlap-weighted mean, and the plot is regenerated (about 1.1–2.0 cM/Mb, previously 0.04–0.82).
-- **Resolved: the `finemap` conda env was missing `openpyxl`**, even though `environment.yml` listed it. openpyxl 3.1.5 has now been installed into the env.
-- **Three numbers in the PI writeups could not be reproduced, even from the old files:**
-  - PI_VS_HOTSPOT_DISTANCE "3.1% of cM from intervals <100 bp"
-  - PI_VS_HOTSPOT_DISTANCE masked/unmasked ρ "−0.755 / 1.000"
-  - PI_CODING_VS_RECOMBINATION 0D "0.325" at ≥500 sites
+  - **Why keep cross-chain intervals:** kept cross-chain intervals preserve length nearly 1:1 (median 0.99; 90% within 0.82–1.23), close to same-chain intervals (0.92–1.10). That is expected for chain breaks within collinear sequence.
+  - **Configuration and tests:** the ratio is set with `--cross-chain-ratio`, and `--same-chain-only` rejects all cross-chain pairs. Regression tests cover the kept branch, the inclusive 0.5 and 2.0 bounds, and just-outside values.
+  - **Documentation:** the reversed source row is documented under Source QC in the README.
+- **§3 — addressed.** The README now describes chain-block mapping and every rejection rule, drops the CrossMap claim and the reproduction claim, fixes the `plot_marey_map.py --sample-roster` command and default path, and lists `hmm_sample_roster.tsv`. All counts now match the rebuilt outputs. The README has been cut to method and results, and the reproduction steps moved to `PIPELINE.md`.
+- **§4 — addressed.** The five `results/finemap-map-comparison*.png` files are removed; no script generated them and nothing referenced them. `data/example1-4.bed`, `data/simulation_readme.md` and `results/example_metaplots.png` are regenerated from the rebuilt crossover table.
+- **§5 — addressed.** `scripts/check_release.py` checks each stage for internal consistency, cross-checks the counts between stages, and can record content hashes (`--write-manifest`). `tests/test_check_release.py` covers it. Before the rebuild it correctly failed the older `jri_v5.bed` and the missing audit; it now passes. `results/hmm_co_events_long.tsv` and `results/hmm_sample_roster.tsv` are tracked, so a fresh clone can run it. `results/liftover_audit.tsv` (57 MB) stays untracked and is regenerated by `build_jri_v5.py`.
 
-  They were replaced with values from a re-implemented method. Confirm the method matches what was intended.
+## 1. The tracked products do not come from the current pipeline
 
-## Ogut map on v5
+This is the main outstanding issue. The current intermediate HMM table contains 32,548
+European intervals, but the tracked crossover table and default map were generated before
+that HMM rebuild:
 
-- **`data/ogut_v5.csv` and the independent `ogutweird/` hapmaps differ slightly.** `ogut_v5.csv` comes from a direct AnchorWave v2 → v5 lift; `ogutweird/` was built via v2 → v4 → v5.
-  - **Agreement:** 5,683 markers are shared. Of these, 59% have identical positions, 98% are within 10 kb and 99.5% within 100 kb.
-  - **Unshared markers:** 745 markers appear only in the hapmap and 453 only in `ogut_v5.csv`.
-  - **Resolved: `ogut_v5.csv` is the correct one.** The check used the AGPv2 reference (`data/B73_RefGen_v2.fa.gz`, MaizeGDB, not tracked). For each marker, the 101 bp around its v2 position was searched for within ±300 bp of each candidate v5 position, on both strands.
-    - These numbers predate the fix to `lift_ogut()` coordinates (see below) and could not be recomputed here because `ogutweird/` is not in the repository. The fix moves 36 reverse-strand markers by 2 bp and changes which markers lift (5 gained, 2 lost), so at most 36 of the shared markers can change class; the conclusion stands.
-    - **Across all 5,683 shared markers:** the v2 sequence sits exactly at the `ogut_v5.csv` position for 97.3%, and at the ogutweird position for 58.7%.
-    - **Where the two disagree (2,305 markers):** `ogut_v5.csv` alone is exact for 2,196, ogutweird alone for 5, both for 11 and neither for 93. The median mismatch at ogutweird's positions is 59 of 101 bp, i.e. no match.
-    - **Conclusion:** the v2 → v4 → v5 route used for ogutweird misplaces about 40% of markers by bp to kb.
-- **Resolved: 115 of 6,139 lifted Ogut markers (1.9%) lack sequence support at their position.** An earlier version reported 242 of 6,136 and called the 34 rejected markers that were out of cM order lift-over errors. That was wrong: `lift_ogut()` fed 1-based positions to CrossMap as BED starts and read the lifted BED start back as 1-based. The errors cancel on forward chains but put all 36 markers on reverse-strand chains 2 bp off (e.g. M395 at 66,452,031 instead of 66,452,033). With the fix, all 36 match exactly. Unsupported markers are dropped with `scripts/verify_ogut_v5.py --filter`, leaving 6,024.
-  - **The ungapped ±50 bp test was too strict.** Of 209 markers that failed it, 90% sat within 50 bp of an alignment gap in the chain. The check now also accepts a marker when either one-sided flank (marker base plus 50 bp) matches exactly at the position with ≤2 mismatches. That recovers 94 markers (78 with 0 mismatches) and adds no cM-order breaks. The 115 still rejected have ≥3 mismatches on their better flank (median 23), a clean gap from the passing ones.
-  - **35 markers are still out of cM order** (34 on reverse-strand chains plus M2180, next to M2178 on chr3). They lie in blocks that v5 inverts relative to AGPv2 (e.g. the last 2 Mb of chr2, 141–143 Mb on chr7 and 121.7–122.2 Mb on chr6). The Ogut cM values are monotone in AGPv2 position, so the Ogut order follows AGPv2 across these blocks. The markers are placed correctly by sequence and are kept. The inversions may reflect AGPv2 orientation errors; this has not been checked.
-- **The corrected map fits the Ogut Marey curve worse on chr1, chr2 and chr7** (RMSE 2.6→2.8, 3.4→5.1 and 3.0→5.5 cM), though it fits better on the other seven. This is worth a look for local problems, e.g. rearrangements between AGPv2 and v5.
+- `results/hmm_co_events_long.tsv`: modified 2026-09-28 23:25, 32,548 records
+- `data/jri_v5.bed`: modified 2026-09-28 22:52, 409,510 records
+- `data/finemap_v5.bed`: modified 2026-09-28 22:52
+- `data/finemap_hierarchical_v5.bed`: modified 2026-09-28 23:48
 
-## Lift-over quality
+The hierarchical map therefore uses the revised optimizer but the older crossover table.
+The default map, HapMap exports, hotspot tracks and downstream figures also represent the
+older lift/HMM generation. Finalize the lift-over policy, then rebuild the dependency chain
+in order:
 
-- **The swapped chain is not netted from the v2 side.** An inverted v5 → v2 chain can contain overlapping blocks in v2 coordinates, so some v2 positions may map to more than one place. CrossMap's handling of those cases was not audited.
-- **Some lifted intervals changed length a lot.** For 1% of re-lifted v2 intervals, v5 length / v2 length is above 2.96, and for 1% it is below 0.61. These are likely intervals spanning structural differences. Filtering them could sharpen the map.
-- **About 13–16% of v2 intervals still fail to lift** (RM 87.0% retained, European 84.2%).
-- **Resolved: crossover endpoints were split as `[start, start+1)` / `[end-1, end)` from 1-based source coordinates**, so every interval was 1 bp short. The left marker is now `[start-1, start)`. Result: 409,510 intervals (15 fewer, because endpoints next to alignment gaps flip between lifting and failing). The maps are identical at 1 Mb scale, but `finemap_v5.bed` now has 262,448 segments instead of 193,790, because an interval ending at a SNP and one starting at the same SNP now both include it, so their edges are 1 bp apart instead of shared, adding many 1-bp segments.
+1. `hmm_co_pipeline.py`
+2. `build_jri_v5.py`
+3. both FineMap builders and HapMap exports
+4. hotspots and all plots/analyses that consume either map
+5. simulated examples and their metaplots
 
-## Files not committed
+Record the resulting source counts and preferably a checksum or provenance manifest so a
+mixed-generation release is easy to detect.
 
-- **`ogutweird/`** (external comparison hapmaps) and **`results/rate_chr4_83.5-87.5Mb.png`** were never tracked and are no longer on disk. The ogutweird comparison numbers above therefore can't be recomputed after the coordinate fix until those hapmaps are restored.
+## 2. `build_jri_v5.py` does not reproduce the tracked data or README counts
+
+A clean temporary run of the current script produced 402,018 intervals, not the tracked and
+documented 409,510:
+
+| Source | Current script | README/tracked generation |
+|---|---:|---:|
+| Rodgers-Melnick | 117,580 | 118,323 |
+| European HMM | 27,267 | 27,328 (from the older HMM) |
+| Samayoa landrace | 133,183 | 136,712 |
+| Samayoa teosinte | 123,988 | 127,147 |
+| **Total** | **402,018** | **409,510** |
+
+The new audit is useful and reports 7,035 opposite-strand intervals, 81 cross-chromosome
+intervals, 194 intervals with inconsistent endpoint order, and 23,525 intervals with an
+unmapped endpoint. Those exclusions are defensible and directly address the earlier review.
+However, the README still says that the script “reproduces the tracked files exactly.”
+
+The handling of endpoints on different chain IDs remains a scientific decision rather than
+a demonstrated property of the alignment. The script retains 11,235 such intervals when
+their lifted/source length ratio is between 0.5 and 2.0 and rejects another 335 outside that
+range. The threshold is hard-coded as `CROSS_CHAIN_RATIO`, has no empirical justification in
+the documentation, and its retained branch lacks a direct regression test. Before releasing
+the rebuilt map, compare at least these alternatives:
+
+- require both endpoints to belong to one chain;
+- retain same-strand cross-chain pairs with the current 0.5–2.0 rule;
+- use a broader length-ratio quality flag and test map sensitivity.
+
+Report how each choice changes source retention and the 100 kb rate profile. If the current
+rule is retained, document why the chain IDs can differ without crossing an unaligned or
+rearranged region and add boundary tests at exactly 0.5 and 2.0.
+
+One source row has reversed coordinates (`14FL991382:250410665`, chr5
+246405086–688921). It is now audited as `invalid_source_interval`, which is appropriate,
+but this input anomaly should be mentioned in the source QC summary.
+
+## 3. README commands and descriptions lag behind the code
+
+The lift-over section still says `build_jri_v5.py` calls CrossMap and accepts `--crossmap`.
+The current implementation maps endpoints directly through `chain_liftover.py`; it has no
+`--crossmap` option. The README also omits the same-strand, strand-consistent-order,
+cross-chain length-ratio and ambiguity rules.
+
+The HMM Marey-map example is no longer runnable as written. `plot_marey_map.py` now requires
+`--sample-roster`, but the README command does not provide it. The text says the default
+event path is stale even though the code now defaults to `results/hmm_co_events_long.tsv`.
+The list of HMM intermediates should include `results/hmm_sample_roster.tsv`.
+
+Update all lift-over counts, the combined interval total and default-map segment count only
+after the lift policy is final and the tracked outputs have been rebuilt.
+
+## 4. Stale simulations and figures remain
+
+`data/example1.bed` through `data/example4.bed` still predate the corrected crossover table,
+although `simulate_example_regions.py` samples its length distribution from
+`data/jri_v5.bed`. Regenerate them after the final crossover rebuild, then regenerate
+`results/example_metaplots.png`.
+
+The five tracked `results/finemap-map-comparison*.png` files remain stale and no script in
+the repository generates them. Delete them, or add a reproducible generator and rebuild
+them from the final maps. The old hotspot and diversity figures should likewise be treated
+as stale until the current map dependency chain has been rerun.
+
+## 5. Add one end-to-end provenance check
+
+The focused tests catch the corrected formulas and edge cases, but none verifies that the
+tracked products were generated by the current inputs and code. Add a lightweight release
+check that verifies, at minimum:
+
+- HMM event and roster counts;
+- per-source lift-over counts and rejection categories;
+- `jri_v5.bed` source counts and chromosome bounds;
+- map segment counts, monotonic cumulative cM and per-chromosome Ogut totals;
+- HapMap terminal positions and agreement with the default map;
+- expected output timestamps or content hashes in dependency order.
+
+This would have caught the current mixture of revised HMM output, older crossover/default
+map files, and a newly optimized hierarchical map immediately.
+
+## Confirmed fixed
+
+- Ogut markers use correct one-based/BED conversion, including reverse-strand chains.
+- The metaplot's rate mode is invariant to segment splitting.
+- README Steps 2/3 have a scripted implementation and chromosome/schema validation.
+- HMM crossover brackets use supporting observations; flip filtering is chromosome-local
+  and uses retained samples.
+- Resolution weighting is correctly described as `1/width` per base.
+- Haploid VCF parsing reads `GT` through FORMAT and rejects unsupported ploidy.
+- The hierarchical optimizer checks gradient and rate stability and fails if unconverged.
+- Bootstrap blocks use physical coordinates and do not bridge filtered genomic gaps.
+- Equal-weight FineMap segments are merged only when physically adjacent.
+- GFF starts are converted to zero-based coordinates in gene-coverage calculations.

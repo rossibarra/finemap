@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Lift the four crossover interval sources to B73 v5 and build data/jri_v5.bed.
 
-Runs README Steps 2 and 3:
+Runs PIPELINE.md Steps 2 and 3:
 
 1. Convert each source to BED with the chromosome names its chain expects
    (AGPv2 chain: Chr1..Chr10; AGPv4 chain: 1..10).
@@ -73,6 +73,12 @@ def parse_args():
                         help="Directory for the four output BED files (default: data/).")
     parser.add_argument("--euro-tsv", type=Path, default=EURO_TSV,
                         help="European HMM events table.")
+    parser.add_argument("--cross-chain-ratio", type=float, nargs=2, metavar=("LO", "HI"),
+                        default=list(CROSS_CHAIN_RATIO),
+                        help="Keep endpoints on different chains (same strand, consistent order) "
+                             "when lifted/source length is within [LO, HI] (default: 0.5 2.0).")
+    parser.add_argument("--same-chain-only", action="store_true",
+                        help="Reject every interval whose endpoints lie on different chains.")
     parser.add_argument("--audit", type=Path, default=ROOT / "results/liftover_audit.tsv",
                         help="Per-interval lift-over audit TSV (default: results/liftover_audit.tsv).")
     parser.add_argument("--workdir", type=Path,
@@ -139,14 +145,15 @@ def read_samayoa(path):
 
 # ---------------------------------------------------------------- lift-over
 
-def lift_endpoints(rows, chain, workdir, tag, audit):
+def lift_endpoints(rows, chain, workdir, tag, audit, cross_chain_ratio=CROSS_CHAIN_RATIO):
     """Lift both endpoints of each interval; return {key: (v5 chr number, start, end)}.
 
     Endpoint markers are BED [start-1, start) and [end-1, end) for 1-based source
     positions. Intervals spanning an inversion (different strands), another
     chromosome or an ambiguous endpoint are rejected. Intervals crossing a chain
     break on the same strand are kept if their lifted/source length ratio lies
-    within CROSS_CHAIN_RATIO, so chain-dense regions are not systematically lost.
+    within cross_chain_ratio (inclusive), so chain-dense regions are not
+    systematically lost. cross_chain_ratio=None rejects all cross-chain pairs.
     """
     src = workdir / f"{tag}_markers_src.bed"
     points = defaultdict(list)
@@ -188,10 +195,9 @@ def lift_endpoints(rows, chain, workdir, tag, audit):
             else:
                 s, e = min(a.position, b.position), max(a.position, b.position) + 1
                 ratio = (e - s) / (end - start + 1)
-                lo, hi = CROSS_CHAIN_RATIO
                 if a.chain == b.chain:
                     lifted[key] = (n, s, e)
-                elif lo <= ratio <= hi:
+                elif cross_chain_ratio and cross_chain_ratio[0] <= ratio <= cross_chain_ratio[1]:
                     reason = "kept_cross_chain"
                     lifted[key] = (n, s, e)
                 else:
@@ -275,7 +281,8 @@ def main():
 
     # AGPv2 sources: IDs assigned before lift; sorted like `sort -k1,1 -k2,2n`.
     v2_rows = raw["RMv2"] + raw["EUROv2"]
-    lifted = lift_endpoints(v2_rows, V2V5_CHAIN, workdir, "v2", audit)
+    ratio = None if args.same_chain_only else tuple(args.cross_chain_ratio)
+    lifted = lift_endpoints(v2_rows, V2V5_CHAIN, workdir, "v2", audit, ratio)
     rm_euro = []
     for _chrom, _start, _end, sample, key in v2_rows:
         if key in lifted:
@@ -292,7 +299,7 @@ def main():
     # the key, prefix Chr, and number rows in that order.
     combined = rm_euro[:]
     for src, (_path, name) in SAMAYOA.items():
-        lifted = lift_endpoints(raw[src], V4V5_CHAIN, workdir, src, audit)
+        lifted = lift_endpoints(raw[src], V4V5_CHAIN, workdir, src, audit, ratio)
         rows = []
         for _chrom, _start, _end, taxon, key in raw[src]:
             if key in lifted:

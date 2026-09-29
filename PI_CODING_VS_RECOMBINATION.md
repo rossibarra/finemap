@@ -213,7 +213,8 @@ python scripts/pi_coding_vs_recombination.py \
 | `--block-mb` | Bootstrap block size in Mb, default 5 |
 | `--n-boot` | Bootstrap replicates, default 1000 |
 
-Spearman ρ, the moving-block bootstrap and the partial correlation are imported directly from
+Spearman ρ, the chromosome-stratified block bootstrap (fixed, non-overlapping 5 Mb physical
+blocks) and the partial correlation are imported directly from
 `scripts/pi_vs_recombination.py`, so the two analyses use identical statistics. Outputs are
 `results/pi_coding_vs_recombination.png`, `_ratio.png`, `_summary.tsv`, `_deciles.tsv` and
 `_windows.tsv.gz`.
@@ -241,8 +242,8 @@ than reshaping the sample. Going higher trades windows for precision quickly, es
 `--min-sites-4d 500` would discard four fifths of windows and strongly favour the most gene-dense
 ones.
 
-The result is not sensitive to the cutoff. Spearman ρ for maize π<sub>4D</sub> is 0.381
-(≥ 20 sites), 0.397 (≥ 100), 0.418 (≥ 200) and 0.461 (≥ 500); the modest increase is the
+The result is not sensitive to the cutoff. Spearman ρ for maize π<sub>4D</sub> is 0.382
+(≥ 20 sites), 0.398 (≥ 100), 0.418 (≥ 200) and 0.461 (≥ 500); the modest increase is the
 expected attenuation of noise, not a change in sign or story. The same holds for 0D
 (0.297 → 0.333 across the same span) and for the 0D/4D ratio (−0.027 → −0.037 in maize).
 
@@ -255,30 +256,30 @@ ratio (both classes pass and π<sub>4D</sub> > 0).
 
 | Population | π<sub>0D</sub> | Spearman ρ | 95% CI | Partial ρ |
 |------------|----------------|------------|--------|-----------|
-| maize | 0.0034 | 0.302 | 0.270–0.334 | 0.220 |
-| *mexicana* | 0.0053 | 0.238 | 0.206–0.268 | 0.182 |
-| *parviglumis* | 0.0054 | 0.220 | 0.189–0.249 | 0.174 |
+| maize | 0.0034 | 0.302 | 0.275–0.328 | 0.220 |
+| *mexicana* | 0.0053 | 0.238 | 0.215–0.261 | 0.181 |
+| *parviglumis* | 0.0054 | 0.219 | 0.196–0.243 | 0.173 |
 
 **π at 4-fold degenerate sites** (synonymous proxy):
 
 | Population | π<sub>4D</sub> | Spearman ρ | 95% CI | Partial ρ |
 |------------|----------------|------------|--------|-----------|
-| maize | 0.0108 | 0.397 | 0.361–0.430 | 0.331 |
-| *mexicana* | 0.0146 | 0.356 | 0.318–0.391 | 0.303 |
-| *parviglumis* | 0.0158 | 0.347 | 0.311–0.383 | 0.310 |
+| maize | 0.0108 | 0.398 | 0.368–0.423 | 0.332 |
+| *mexicana* | 0.0146 | 0.357 | 0.327–0.386 | 0.303 |
+| *parviglumis* | 0.0158 | 0.348 | 0.321–0.374 | 0.311 |
 
 π<sub>4D</sub> is close to the all-sites estimate for each population (0.0124 / 0.0205 / 0.0226
 genome-wide), while π<sub>0D</sub> is roughly a third of it — the expected footprint of purifying
 selection on replacement sites. The domestication bottleneck is visible in both classes: maize
 carries about two thirds of teosinte diversity at 4D sites.
 
-π by recombination decile, lowest (median 0.04 cM/Mb) to highest (median 3.87 cM/Mb at 0D, 3.99 at 4D):
+π by recombination decile, lowest (median 0.04 cM/Mb) to highest (median 3.87 cM/Mb at 0D, 4.01 at 4D):
 
 | Population | 0D lowest | 0D highest | Fold | 4D lowest | 4D highest | Fold |
 |------------|-----------|------------|------|-----------|------------|------|
-| maize | 0.00262 | 0.00416 | 1.59× | 0.00592 | 0.01460 | 2.47× |
-| *mexicana* | 0.00339 | 0.00663 | 1.95× | 0.00827 | 0.01905 | 2.30× |
-| *parviglumis* | 0.00395 | 0.00646 | 1.63× | 0.00960 | 0.01983 | 2.07× |
+| maize | 0.00230 | 0.00416 | 1.81× | 0.00602 | 0.01458 | 2.42× |
+| *mexicana* | 0.00338 | 0.00662 | 1.96× | 0.00841 | 0.01890 | 2.25× |
+| *parviglumis* | 0.00385 | 0.00632 | 1.64× | 0.00979 | 0.01979 | 2.02× |
 
 ![π at 0D and 4D sites vs recombination rate](results/pi_coding_vs_recombination.png)
 
@@ -294,9 +295,9 @@ haplotypes this difference should not be pushed hard.
 
 | Population | π<sub>0D</sub>/π<sub>4D</sub> | Spearman ρ vs rate | 95% CI | Partial ρ | Lowest decile | Highest decile |
 |------------|-------------------------------|--------------------|--------|-----------|---------------|----------------|
-| maize | 0.310 | −0.036 | −0.056 to −0.015 | −0.064 | 0.417 | 0.286 |
-| *mexicana* | 0.358 | −0.044 | −0.070 to −0.019 | −0.056 | 0.386 | 0.350 |
-| *parviglumis* | 0.338 | −0.063 | −0.086 to −0.040 | −0.079 | 0.390 | 0.320 |
+| maize | 0.310 | −0.036 | −0.054 to −0.015 | −0.064 | 0.419 | 0.286 |
+| *mexicana* | 0.358 | −0.044 | −0.066 to −0.022 | −0.056 | 0.387 | 0.351 |
+| *parviglumis* | 0.338 | −0.063 | −0.084 to −0.041 | −0.079 | 0.395 | 0.321 |
 
 ![π0D/π4D vs recombination rate](results/pi_coding_vs_recombination_ratio.png)
 
@@ -334,20 +335,20 @@ On the matched set:
 | | Spearman ρ | | | log-log slope | | |
 |---|---|---|---|---|---|---|
 | **class** | maize | *mexicana* | *parviglumis* | maize | *mexicana* | *parviglumis* |
-| 4D | **0.412** | **0.369** | **0.362** | 0.22 | 0.21 | 0.19 |
-| 0D | 0.329 | 0.270 | 0.254 | 0.19 | 0.17 | 0.16 |
-| all sites | 0.315 | 0.244 | 0.246 | 0.21 | 0.11 | 0.10 |
+| 4D | **0.413** | **0.370** | **0.363** | 0.22 | 0.20 | 0.19 |
+| 0D | 0.330 | 0.270 | 0.253 | 0.19 | 0.17 | 0.16 |
+| all sites | 0.316 | 0.245 | 0.246 | 0.21 | 0.11 | 0.10 |
 
-**4D exceeds 0D in every population** on matched windows (gap 0.083 / 0.099 / 0.109),
-slightly narrower than in the separate analyses (0.096 / 0.118 / 0.128) but of the same sign
+**4D exceeds 0D in every population** on matched windows (gap 0.083 / 0.100 / 0.110),
+slightly narrower than in the separate analyses (0.096 / 0.119 / 0.129) but of the same sign
 and similar size. This is the central result: neutral
 sites retain the signature of linked selection, while 0D diversity is already suppressed
 by direct purifying selection whatever the local rate.
 
-All sites ranks last here, which is not a contradiction of the 0.367 reported in
+All sites ranks last here, which is not a contradiction of the 0.368 reported in
 [PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md). The matched set is by construction the
 gene-containing subset of the genome — distal, high-recombination windows — so the
-recombination range is compressed and every correlation computed on it shrinks. Use 0.367
+recombination range is compressed and every correlation computed on it shrinks. Use 0.368
 for all sites genome-wide and the table above only for comparing classes.
 
 Two features are visible only on log axes:
@@ -357,7 +358,7 @@ Two features are visible only on log axes:
   relationship is nearer a power law than a saturating one, as expected if diversity
   scales with *N*e·r.
 - **Maize is the outlier at all sites** (slope 0.21 vs 0.11 and 0.10) but not in the coding
-  classes (0.22 vs 0.21 and 0.19). Maize's steeper all-sites response therefore comes from
+  classes (0.22 vs 0.20 and 0.19). Maize's steeper all-sites response therefore comes from
   non-coding sequence rather than from genes — possibly the domestication bottleneck acting
   where background selection is weaker, possibly a difference in what aligns in maize
   versus the teosintes. Unresolved.
@@ -369,13 +370,14 @@ slopes are if anything slightly under-estimated. The decile panels are unaffecte
 ## Caveats
 
 **Autocorrelation.** As in the all-sites analysis, adjacent windows are not independent; all
-intervals come from a moving-block bootstrap over contiguous 5 Mb blocks within chromosomes, and
+intervals come from a chromosome-stratified block bootstrap over fixed, non-overlapping 5 Mb
+physical blocks, resampled within each chromosome, and
 no asymptotic p-value is reported.
 
 **Gene density is the central confounder here.** 0D and 4D sites exist only in genes, gene
 density rises toward the chromosome arms, and so does recombination rate. Controlling for gene
 density and centromere distance shrinks the correlations by roughly a sixth to a quarter (maize 4D
-0.397 → 0.331; maize 0D 0.302 → 0.220) — less than the 35–40% reduction seen in the all-sites analysis,
+0.398 → 0.332; maize 0D 0.302 → 0.220) — less than the 35–40% reduction seen in the all-sites analysis,
 but the residual association is still not free of shared chromosome-scale structure. For the
 ratio, conditioning strengthens rather than weakens the association (maize −0.036 → −0.064), so
 the ratio's decline is not a by-product of gene density.

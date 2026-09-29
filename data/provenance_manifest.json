@@ -1,0 +1,283 @@
+{
+ "version": 1,
+ "written": "2026-09-29T10:07:26",
+ "graph": {
+  "hmm": {
+   "inputs": [
+    "data/gb-2013-14-9-r103-S4.xlsx",
+    "scripts/hmm_co_pipeline.py"
+   ],
+   "outputs": [
+    "results/hmm_co_events_long.tsv",
+    "results/hmm_sample_roster.tsv"
+   ]
+  },
+  "liftover": {
+   "inputs": [
+    "results/hmm_co_events_long.tsv",
+    "data/RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt",
+    "data/RodgersMelnick2015PNAS_usnamImputedXOsegments.txt",
+    "data/xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt",
+    "data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_AGPv4_filtered0210.txt",
+    "data/v2v5.chain",
+    "data/v4v5.chain",
+    "data/v5.fa.gz.fai",
+    "scripts/build_jri_v5.py",
+    "scripts/chain_liftover.py"
+   ],
+   "outputs": [
+    "data/jri_v5.bed",
+    "data/jri_rm_euro_v5.bed",
+    "data/xo_Combined_LR13_LR14_parents2_v5.bed",
+    "data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed",
+    "results/liftover_audit.tsv"
+   ]
+  },
+  "finemap": {
+   "inputs": [
+    "data/jri_v5.bed",
+    "data/ogut_fifthcM_map_agpv2.csv",
+    "data/v5.fa.gz.fai",
+    "scripts/build_finemap.py"
+   ],
+   "outputs": [
+    "data/finemap_v5.bed"
+   ]
+  },
+  "hierarchical": {
+   "inputs": [
+    "data/jri_v5.bed",
+    "data/ogut_fifthcM_map_agpv2.csv",
+    "data/v5.fa.gz.fai",
+    "scripts/build_hierarchical_finemap.py"
+   ],
+   "outputs": [
+    "data/finemap_hierarchical_v5.bed"
+   ]
+  },
+  "hapmap": {
+   "inputs": [
+    "data/finemap_v5.bed",
+    "data/v5.fa.gz.fai",
+    "scripts/build_finemap.py"
+   ],
+   "outputs": [
+    "data/hapmap/chr1.hapmap.tsv",
+    "data/hapmap/chr2.hapmap.tsv",
+    "data/hapmap/chr3.hapmap.tsv",
+    "data/hapmap/chr4.hapmap.tsv",
+    "data/hapmap/chr5.hapmap.tsv",
+    "data/hapmap/chr6.hapmap.tsv",
+    "data/hapmap/chr7.hapmap.tsv",
+    "data/hapmap/chr8.hapmap.tsv",
+    "data/hapmap/chr9.hapmap.tsv",
+    "data/hapmap/chr10.hapmap.tsv"
+   ]
+  },
+  "hotspots_30x": {
+   "inputs": [
+    "data/finemap_v5.bed",
+    "scripts/define_hotspots.py"
+   ],
+   "outputs": [
+    "data/hotspots_30x_v5.bed"
+   ]
+  },
+  "hotspots_1kb_20x": {
+   "inputs": [
+    "data/finemap_v5.bed",
+    "scripts/define_hotspots_sliding.py"
+   ],
+   "outputs": [
+    "data/hotspots_1kb_20x_v5.bed"
+   ]
+  }
+ },
+ "files": {
+  "data/gb-2013-14-9-r103-S4.xlsx": {
+   "sha256": "4317f40362a5bbb8d0496f3c59a5f1acb14f8baedd3a86cda93404f3f02e7bc0",
+   "bytes": 15103178,
+   "rows": null
+  },
+  "scripts/hmm_co_pipeline.py": {
+   "sha256": "4834cd710197a1c07d40fce3513ea3ae4a14814fc223a91677e63978f9d859db",
+   "bytes": 20851,
+   "rows": 558
+  },
+  "results/hmm_co_events_long.tsv": {
+   "sha256": "a416a19af72d1caae325048c18aadfaac9b8d91d8877d92ac1ec30407ce2c9fa",
+   "bytes": 2666117,
+   "rows": 32549
+  },
+  "results/hmm_sample_roster.tsv": {
+   "sha256": "a5a9cb24f64617b1beb3e8cb8f72b174f80c609e69d24628586480c0020ceb04",
+   "bytes": 488215,
+   "rows": 22091
+  },
+  "data/RodgersMelnick2015PNAS_cnnamImputedXOsegments.txt": {
+   "sha256": "9c817e44e85ccca6e3e163f5d608194fc90bf97e6b9001f7df689900744ff3dd",
+   "bytes": 3862889,
+   "rows": 61595
+  },
+  "data/RodgersMelnick2015PNAS_usnamImputedXOsegments.txt": {
+   "sha256": "d2de5866a431bb5ab3ee5f160490c6f24812df694d3875e9c1b832ec6f390366",
+   "bytes": 12219434,
+   "rows": 195736
+  },
+  "data/xo_Combined_LR13_LR14_parents2_AGPv4_filter0219.txt": {
+   "sha256": "a669aa5582d6f399cf566ecb735ae27a5f2e74e09efe5472dab58887a0ba565a",
+   "bytes": 5741434,
+   "rows": 137101
+  },
+  "data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_AGPv4_filtered0210.txt": {
+   "sha256": "e4e1094e99010ce9aec116600645a0da5d417faa8289ab0cc0425d3def9b9799",
+   "bytes": 3439064,
+   "rows": 127547
+  },
+  "data/v2v5.chain": {
+   "sha256": "a59d152bfa90577e1674a32aaaf6affef32f35c1dd0b6ab65f56443547a3af3e",
+   "bytes": 14011636,
+   "rows": 1951291
+  },
+  "data/v4v5.chain": {
+   "sha256": "166ace24eb05de53c0ab06a94b194d97c335a2b277d2a8cc22bb7c48d371cc42",
+   "bytes": 813819,
+   "rows": 69255
+  },
+  "data/v5.fa.gz.fai": {
+   "sha256": "42c539bc998bfa6d69d822257140b36dbb67db62885d20684677c67dd55d2b74",
+   "bytes": 21939,
+   "rows": 685
+  },
+  "scripts/build_jri_v5.py": {
+   "sha256": "45f804c681a00ae5e37876d439570e08e51e819d105e24c22dc03790f019bfda",
+   "bytes": 15275,
+   "rows": 339
+  },
+  "scripts/chain_liftover.py": {
+   "sha256": "db39489952f5a545035f7533ebda344548cdaa8314ab868104422cc677b3464f",
+   "bytes": 2920,
+   "rows": 73
+  },
+  "data/jri_v5.bed": {
+   "sha256": "c8f38319785c7ada431acd9001aea0d4fb1df1668d867ddcbc9518a118ed6e5f",
+   "bytes": 22178263,
+   "rows": 402018
+  },
+  "data/jri_rm_euro_v5.bed": {
+   "sha256": "d217a9828d710d6daa9c266c438bed742fd50f18c42218e169953ee84a1a631d",
+   "bytes": 9273713,
+   "rows": 144847
+  },
+  "data/xo_Combined_LR13_LR14_parents2_v5.bed": {
+   "sha256": "587da282b70db7f91a3e763bee7fcb1aec239fb015c254a13cd1e81d5469e9a1",
+   "bytes": 5978525,
+   "rows": 133183
+  },
+  "data/xo_ZeaGBSv27raw_RareAllelesC2TeoCurated_depth_v5.bed": {
+   "sha256": "68d4be0f3e9e2656140dc40114a30dcaacb41ef20fe2ea429436183a6e7a9a77",
+   "bytes": 3715985,
+   "rows": 123988
+  },
+  "results/liftover_audit.tsv": {
+   "sha256": "74548d9d225784d13fd48a76185af6de6013b7f71340167241885fd9e307a135",
+   "bytes": 57004129,
+   "rows": 433190
+  },
+  "data/ogut_fifthcM_map_agpv2.csv": {
+   "sha256": "c678b5082d1f42ee4513914aa2e51940c7a25a1b16dc4136ac7e0690f847d753",
+   "bytes": 262415,
+   "rows": 7386
+  },
+  "scripts/build_finemap.py": {
+   "sha256": "d68893be679fdffa8668203de1b211321ca7c46b7d93597c025c2ba9b7b1e5aa",
+   "bytes": 5347,
+   "rows": 164
+  },
+  "data/finemap_v5.bed": {
+   "sha256": "015f64afefd2bce387a7d11db2ebe5bd483bdd919c52fb1d91b32a08a50290de",
+   "bytes": 20776014,
+   "rows": 261395
+  },
+  "scripts/build_hierarchical_finemap.py": {
+   "sha256": "f29a5c83f78e54d85a7f2ccdb689fcfb01f12deb6e6c8577582087a50c8b49f4",
+   "bytes": 17070,
+   "rows": 366
+  },
+  "data/finemap_hierarchical_v5.bed": {
+   "sha256": "cff08af07d5bec5d4047ea57215a06bbcc2fb5df96ba9b0b5f7a89e495308b05",
+   "bytes": 1705598,
+   "rows": 21325
+  },
+  "data/hapmap/chr1.hapmap.tsv": {
+   "sha256": "08d54af3b7c781618d667f7ff16c0cddaff0ceea1dd904f557b43432858faf53",
+   "bytes": 1569119,
+   "rows": 40530
+  },
+  "data/hapmap/chr2.hapmap.tsv": {
+   "sha256": "b0469df31b0a1884353d64c52d85b5b0e56373ca07c9b7a56a8eec3a434ff01b",
+   "bytes": 1201367,
+   "rows": 31163
+  },
+  "data/hapmap/chr3.hapmap.tsv": {
+   "sha256": "d381e6d897aac121ab3ca1e16d907bb04df60f7c8e2347fea019138d53195029",
+   "bytes": 1151239,
+   "rows": 29749
+  },
+  "data/hapmap/chr4.hapmap.tsv": {
+   "sha256": "6306d1846c87001aab7edd3e4d8f0ec49d91070b5c0d229542758de3a9eb43b6",
+   "bytes": 959342,
+   "rows": 24747
+  },
+  "data/hapmap/chr5.hapmap.tsv": {
+   "sha256": "a6fd5b581ed8383cbbc764a2d23e93d41a451bf807c6a36038e549c9fa0c3399",
+   "bytes": 1156568,
+   "rows": 30009
+  },
+  "data/hapmap/chr6.hapmap.tsv": {
+   "sha256": "f84c60fa35f6c5824967ce185089d3ce13a904ba0aae50b247cf303334cd35ab",
+   "bytes": 839985,
+   "rows": 21560
+  },
+  "data/hapmap/chr7.hapmap.tsv": {
+   "sha256": "86079cf147fb86d63c17917848eb147b57ba04479c6ed3c0096ca47fc21a5e43",
+   "bytes": 889242,
+   "rows": 23002
+  },
+  "data/hapmap/chr8.hapmap.tsv": {
+   "sha256": "943834981759a17c85c14604483f5da7c159783c172e58711108f31e5825b01b",
+   "bytes": 888503,
+   "rows": 22970
+  },
+  "data/hapmap/chr9.hapmap.tsv": {
+   "sha256": "1d2d3c898762878af096613f1ae29a365cee9c23f7bcb7f232a8466bf8d13329",
+   "bytes": 778427,
+   "rows": 20144
+  },
+  "data/hapmap/chr10.hapmap.tsv": {
+   "sha256": "ebbcdaf07a699a3259dca71ece76fd9393010c56dcf66dfd8a59360aec7b44d6",
+   "bytes": 695279,
+   "rows": 17561
+  },
+  "scripts/define_hotspots.py": {
+   "sha256": "af5b0d688df556d5c2fa3b5ce1c198a82dde2dbecb5ba14eec835cc350a09f8b",
+   "bytes": 5183,
+   "rows": 109
+  },
+  "data/hotspots_30x_v5.bed": {
+   "sha256": "30d28900c421e34c1d57b2453823b9c3ef21326a08f9462ca71e50010d5b5c58",
+   "bytes": 40931,
+   "rows": 925
+  },
+  "scripts/define_hotspots_sliding.py": {
+   "sha256": "f9bc782bab485366242d3ba936acfd9c5db15c6cdf9726559329594f134d8ee5",
+   "bytes": 5254,
+   "rows": 113
+  },
+  "data/hotspots_1kb_20x_v5.bed": {
+   "sha256": "14777da87ee7553cd62dbfc875f34a9d43cb0ea6bbefcde8cfeffa8fe80aa2cc",
+   "bytes": 24806,
+   "rows": 781
+  }
+ }
+}

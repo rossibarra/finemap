@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5 — 2026-09-29
+
+Fixes from a second pipeline review, a stricter lift-over, and a full rebuild.
+
+- **European HMM calls** (`scripts/hmm_co_pipeline.py`):
+  - Each crossover interval now runs to the nearest markers whose observed genotypes support the decoded state on each side, instead of the immediately adjacent markers.
+  - The isolated-flip marker filter now works within chromosomes, on retained individuals only.
+  - Close call pairs are documented as discarded, not merged.
+  - Sample IDs use the original individual index, and a sample roster is written.
+  - The run now gives 32,548 intervals (was 32,439).
+- **Lift-over** (`scripts/build_jri_v5.py`, new `scripts/chain_liftover.py`):
+  - Endpoints are mapped directly through chain blocks, keeping chain and strand.
+  - Rejected: ambiguous endpoints, endpoints on opposite strands (the interval spans an inversion), reversed endpoint order, endpoints on different chromosomes, and cross-chain pairs whose lifted/source length ratio is outside 0.5–2 (`--cross-chain-ratio`, `--same-chain-only`).
+  - Every decision is written to `results/liftover_audit.tsv`. One reversed source row is skipped.
+  - `data/jri_v5.bed` now has 402,018 intervals. Rejecting inversion-spanning intervals cut the Ogut Marey RMSE on chr2 and chr7 from 5.1 and 5.5 cM to 1.7 and 1.8 cM.
+- **Maps:**
+  - `build_finemap.py` merges equal-weight segments only when they touch.
+  - `build_hierarchical_finemap.py` uses Newton-CG with gradient and rate-stability stopping, and fails if a chromosome doesn't converge.
+  - `finemap_v5.bed` has 261,395 segments. Both maps, the hapmaps and the hotspots are rebuilt.
+- **Analyses:**
+  - Resolution diagnostics use the correct 1/width per-bp density (a 100 bp interval has about 1,354× the density of a median one, not 1.8 million×), and the claims about a 100 kb limit are softened.
+  - `haploid_pi.py` parses FORMAT/GT and rejects diploid calls.
+  - `pi_vs_recombination.py` bootstraps physical blocks within chromosomes.
+  - Gene coverage uses 0-based GFF starts.
+  - `plot_marey_map.py` counts individuals with no crossovers in its denominator.
+- **Release check:** add `scripts/check_release.py`. It verifies HMM, lift-over, `jri_v5.bed`, map, hapmap and hotspot consistency, and records content hashes in `data/provenance_manifest.json`. `results/hmm_co_events_long.tsv` and `results/hmm_sample_roster.tsv` are now tracked.
+- **Docs and tests:**
+  - README reduced to method and results; reproduction steps moved to `PIPELINE.md`.
+  - The stale `results/finemap-map-comparison*.png` figures are removed.
+  - Unit tests are added under `tests/`, and self-tests to several scripts.
+
 ## 0.4 — 2026-09-28
 
 Fix the AGPv2 → v5 lift-over. The chain previously named `data/v2v5.chain`

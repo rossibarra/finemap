@@ -3,6 +3,8 @@ data/v5/gff3
 *.bak
 results/*
 !results/*.png
+!results/hmm_co_events_long.tsv
+!results/hmm_sample_roster.tsv
 *.bak2
 data/*.fa.gz
 data/*.fa.gz.fai

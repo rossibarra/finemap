@@ -39,22 +39,22 @@ should contribute evenly across it. But it has a consequence that matters enormo
 fine scale. Because one event is spread over the interval, the weight *density* per base
 pair goes as **1 / width**.
 
-The source crossover intervals in `data/jri_v5.bed` (n = 409,510) are wide:
+The source crossover intervals in `data/jri_v5.bed` (n = 402,018) are wide:
 
 | statistic | width |
 |-----------|-------|
-| p5 | 5,357 bp |
-| p25 | 54,339 bp |
-| median | **135,356 bp** |
-| p75 | 301,456 bp |
-| p95 | 1,268,401 bp |
-| p99 | 5,578,494 bp |
-| mean | 509,988 bp |
+| p5 | 5,242 bp |
+| p25 | 52,907 bp |
+| median | **131,647 bp** |
+| p75 | 287,175 bp |
+| p95 | 1,001,291 bp |
+| p99 | 5,156,210 bp |
+| mean | 480,921 bp |
 
-59.7% are wider than 100 kb; only 8.2% are narrower than 10 kb.
+59.0% are wider than 100 kb; only 8.3% are narrower than 10 kb.
 
-Combining the two facts: a 100 bp interval deposits **~1,354×** the per-bp weight of a
-median interval, and a 10 kb interval deposits ~13.5×. The typical crossover contributes a
+Combining the two facts: a 100 bp interval deposits **~1,316×** the per-bp weight of a
+median interval, and a 10 kb interval deposits ~13.2×. The typical crossover contributes a
 broad, almost flat smear, while the rare narrow interval contributes a spike.
 
 ![FineMap resolution diagnostic](results/finemap_resolution.png)
@@ -73,20 +73,20 @@ with a minimum width. At 50× the qualifying intervals have a median width of 3 
 are ≤ 100 bp. Obviously artifactual.
 
 **1 kb sliding-window definition** — the mean rate over a fixed window, expected to fix the
-problem by diluting narrow spikes. It does remove the crudest signature: only 7.7% of each
+problem by diluting narrow spikes. It does remove the crudest signature: only 7.6% of each
 hotspot's cM comes from intervals under 100 bp, and the rate-vs-narrowness rank correlation
-flips to −0.775.
+flips to −0.787.
 
 That apparent fix is misleading. Testing at 100 bp asks the wrong question, because the
-relevant comparison is against the 135 kb typical interval, not against the very narrowest.
+relevant comparison is against the 132 kb typical interval, not against the very narrowest.
 Scoring both definitions on the share of crossover weight contributed by intervals under
-10 kb — which are 8.2% of the data — shows the artifact dominating both:
+10 kb — which are 8.3% of the data — shows the artifact dominating both:
 
 | hotspot set | n | median share from < 10 kb intervals | mean | hotspots > 50% |
 |-------------|---|--------------------------------------|------|----------------|
-| 30× point-interval, ≥ 50 bp | 916 | **91.8%** | 86.4% | 95% |
-| 1 kb sliding, 20× | 755 | **78.4%** | 71.7% | 84% |
-| *genome-wide baseline* | — | *8.2%* | — | — |
+| 30× point-interval, ≥ 50 bp | 925 | **92.0%** | 86.7% | 96% |
+| 1 kb sliding, 20× | 781 | **78.9%** | 72.1% | 84% |
+| *genome-wide baseline* | — | *8.3%* | — | — |
 
 Sliding-window averaging is modestly better, and nowhere near sufficient. Both sets are
 built overwhelmingly from the narrow tail of the crossover data. Averaging moved the
@@ -99,19 +99,19 @@ has elevated π for independent reasons (ρ between log distance-to-hotspot and 
 −0.74). The natural response is to control for local background rate.
 
 **That control is invalid here, and not for a subtle reason.** The background rate and the
-hotspot are computed from *the same crossovers*. Given a median source interval of 135 kb,
+hotspot are computed from *the same crossovers*. Given a median source interval of 132 kb,
 a crossover that produces a spike at some position also deposits weight across the
-surrounding ~135 kb, which is exactly the neighbourhood the background rate is measured
+surrounding ~132 kb, which is exactly the neighbourhood the background rate is measured
 over. The covariate and the exposure are one measurement at two smoothings.
 
 Two results confirm this empirically:
 
 - Masking the hotspot regions out of the background rate changes essentially nothing:
-  ρ(log distance, background) goes from −0.737 to −0.736, and the masked and unmasked
+  ρ(log distance, background) goes from −0.738 to −0.737, and the masked and unmasked
   background rates correlate at **1.000**.
 - Within a 100 kb window containing a hotspot, the hotspot itself supplies a median 15.6% of
-  the window's genetic length — yet such windows have 18.6× the median local rate
-  (4.37 vs 0.24 cM/Mb). The elevation is not the hotspot's own cM; it is the same
+  the window's genetic length — yet such windows have 18.3× the median local rate
+  (4.35 vs 0.24 cM/Mb). The elevation is not the hotspot's own cM; it is the same
   crossovers smeared across the window.
 
 Conditioning on local rate therefore drives any hotspot effect to zero by construction. The
@@ -126,20 +126,20 @@ not because the biological result stands.
 
 **Point-interval** (`scripts/define_hotspots.py`): runs of contiguous `finemap_v5.bed`
 intervals above `--fold` × the length-weighted genome mean, merged, with merged regions
-narrower than `--min-width` dropped. At 30× with a 50 bp floor: 9,065 intervals → 1,256
-merged runs → **916 hotspots**, median width 304 bp, 1.24 Mb total carrying 38.4 cM.
+narrower than `--min-width` dropped. At 30× with a 50 bp floor: 9,240 intervals → 1,269
+merged runs → **925 hotspots**, median width 307 bp, 1.27 Mb total carrying 39.5 cM.
 
 **1 kb sliding** (`scripts/define_hotspots_sliding.py`): the mean rate over a sliding
 window, computed exactly by linear interpolation of cumulative cM at interval breakpoints
-rather than by binning, thresholded and merged. At 1 kb / 100 bp step / 20×: 37,163 of
-21.19 M windows pass → **755 hotspots**, median width 2.5 kb, 4.41 Mb total carrying
-84.93 cM (5.76% of the map in 0.21% of the sequence, 28× enrichment).
+rather than by binning, thresholded and merged. At 1 kb / 100 bp step / 20×: 36,496 of
+21.19 M windows pass → **781 hotspots**, median width 2.5 kb, 4.37 Mb total carrying
+84.84 cM (5.75% of the map in 0.21% of the sequence, 28× enrichment).
 
-Only 653 of the 916 point-hotspots (71%) are recovered by the sliding definition.
+Only 657 of the 925 point-hotspots (71%) are recovered by the sliding definition.
 
-The length-weighted genome mean — total cM / total Mb = 1475.2 / 2118.8 = **0.696 cM/Mb** —
-is the correct baseline. The unweighted mean of interval rates is 4.55 cM/Mb, inflated
-6.5× because the map is dominated by very short intervals.
+The length-weighted genome mean — total cM / total Mb = 1475.2 / 2118.7 = **0.696 cM/Mb** —
+is the correct baseline. The unweighted mean of interval rates is 4.60 cM/Mb, inflated
+6.6× because the map is dominated by very short intervals.
 
 ### Input Data
 
@@ -189,7 +189,7 @@ python scripts/pi_vs_hotspot_distance.py \
 | `--window` / `--step` | Sliding window width and stride in bp |
 | `--fold` | Threshold as a multiple of the length-weighted genome mean |
 | `--min-sites` | Drop fine windows below this many callable sites |
-| `--block-mb` | Moving-block bootstrap block size in Mb |
+| `--block-mb` | Block bootstrap block size in Mb (fixed, non-overlapping physical blocks) |
 
 ## Results, and Why They Are Not Interpretable
 
@@ -200,16 +200,16 @@ maize π falls from 0.0181 on hotspots and 0.0196 at 1–2 kb to 0.0117 beyond 5
 
 | Population | raw ρ (π vs log distance) | partial ρ given local rate |
 |------------|---------------------------|----------------------------|
-| maize | −0.264 | +0.004 |
-| *mexicana* | −0.240 | +0.004 |
-| *parviglumis* | −0.217 | +0.011 |
+| maize | −0.265 | +0.005 |
+| *mexicana* | −0.243 | +0.002 |
+| *parviglumis* | −0.219 | +0.006 |
 
 Neither column answers the question:
 
 - **The raw correlation is real but is not about hotspots.** It is the ~100 kb-to-Mb scale
   recombination gradient, which is already reported in
   [PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md) and measured more directly there. 83% of
-  retained windows sit in the > 500 kb bin at a median distance of 10.6 Mb, so much of the
+  retained windows sit in the > 500 kb bin at a median distance of 10.5 Mb, so much of the
   gradient is a contrast between chromosome arms and pericentromeres.
 - **The partial correlation is a tautology**, for the reason given above. Its being ≈ 0 is
   not evidence of no hotspot effect.
@@ -245,5 +245,5 @@ python scripts/finemap_resolution.py --jri data/jri_v5.bed \
   --hotspots <your hotspots.bed> --out results/finemap_resolution.png
 ```
 
-A median share well above the genome-wide 8.2% baseline means the hotspot set is tracking
+A median share well above the genome-wide 8.3% baseline means the hotspot set is tracking
 marker density in the source crosses rather than recombination.

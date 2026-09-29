@@ -91,7 +91,7 @@ remainders), contiguous from position 0 with no gaps. Measuring π on exactly th
 the map is defined on avoids any interpolation between the two variables.
 
 The smoothed hierarchical map is the right choice here rather than `data/finemap_v5.bed`:
-the interval-density map has 262,448 variable-width intervals, many only a few bp wide,
+the interval-density map has 261,395 variable-width intervals, many only a few bp wide,
 which are far too small to hold enough callable sites for a π estimate.
 
 Note that the BED uses `Chr1` while the VCFs use `chr1`; `--lowercase-chrom` reconciles
@@ -166,21 +166,21 @@ Outputs `results/pi_vs_recombination.png`, `_summary.tsv`, and `_windows.tsv.gz`
 
 | Population | π (genome-wide) | Spearman ρ | 95% CI | Partial ρ |
 |------------|-----------------|------------|--------|-----------|
-| maize | 0.0124 | 0.367 | 0.316–0.413 | 0.227 |
-| *mexicana* | 0.0205 | 0.304 | 0.255–0.356 | 0.197 |
-| *parviglumis* | 0.0226 | 0.295 | 0.245–0.341 | 0.194 |
+| maize | 0.0124 | 0.368 | 0.323–0.410 | 0.229 |
+| *mexicana* | 0.0205 | 0.305 | 0.258–0.347 | 0.197 |
+| *parviglumis* | 0.0226 | 0.294 | 0.250–0.334 | 0.193 |
 
 Genome-wide π reproduces the expected domestication bottleneck: maize carries roughly half
 the diversity of either teosinte.
 
 π by recombination decile, from the lowest decile (median 0.03 cM/Mb) to the highest
-(median 3.38 cM/Mb):
+(median 3.40 cM/Mb):
 
 | Population | Lowest decile | Highest decile | Fold change |
 |------------|---------------|----------------|-------------|
-| maize | 0.00709 | 0.01817 | 2.56× |
-| *mexicana* | 0.01375 | 0.02813 | 2.05× |
-| *parviglumis* | 0.01599 | 0.02966 | 1.85× |
+| maize | 0.00703 | 0.01820 | 2.59× |
+| *mexicana* | 0.01362 | 0.02825 | 2.07× |
+| *parviglumis* | 0.01608 | 0.02972 | 1.85× |
 
 ![π vs recombination rate](results/pi_vs_recombination.png)
 
@@ -192,13 +192,13 @@ amplified the effect of drift in regions where recombination cannot break up lin
 ## Caveats
 
 **Autocorrelation.** Adjacent windows are not independent, so the asymptotic p-value over
-16 k windows is meaningless. Confidence intervals come from a moving-block bootstrap that
-resamples contiguous 5 Mb blocks of windows within chromosomes, preserving the
-autocorrelation structure.
+16 k windows is meaningless. Confidence intervals come from a chromosome-stratified block bootstrap
+that resamples fixed, non-overlapping 5 Mb physical blocks within each chromosome, so all
+windows in a block travel together and the autocorrelation structure is preserved.
 
 **Shared chromosome-scale structure.** Recombination rate, gene density, and π all covary
 with distance to the centromere. Controlling for gene density and centromere distance
-reduces the correlation by roughly 35–40% (maize 0.367 → 0.227). A substantial independent
+reduces the correlation by roughly 35–40% (maize 0.368 → 0.229). A substantial independent
 association survives, but over a third of the raw signal is shared large-scale structure.
 
 **Ascertainment.** Callable-site density is itself correlated with recombination rate
