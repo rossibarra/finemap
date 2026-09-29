@@ -19,6 +19,7 @@ This file holds the operational detail for rebuilding the FineMap maps and analy
   - [Release Check](#release-check)
 - [Analysis](#analysis)
   - [Marey Map: Ogut vs finemap_v5](#marey-map-ogut-vs-finemap_v5)
+  - [Local Rate: Ogut vs finemap_hierarchical_v5](#local-rate-ogut-vs-finemap_hierarchical_v5)
   - [Recombination Rate Around Genes](#recombination-rate-around-genes)
   - [Recombination Rate vs Gene Density](#recombination-rate-vs-gene-density)
   - [Gene ± 1 kb Coverage: Physical vs Genetic](#gene--1-kb-coverage-physical-vs-genetic)
@@ -235,6 +236,18 @@ By default, the script reads the tracked `data/ogut_v5.csv` and writes only the 
 
 ```bash
 python scripts/plot_marey_comparison.py --regenerate-ogut-v5
+```
+
+### Local Rate: Ogut vs finemap_hierarchical_v5
+
+Plots cM/Mb from `data/ogut_v5.csv` and `data/finemap_hierarchical_v5.bed` over a 10 Mb window, with a rug of gene midpoints from `data/v5.genes.gff3`. Ogut cM is linearly interpolated at the hierarchical map's 100 kb bin edges and differenced to give cM/Mb. With no arguments the script draws a random window (weighted by chromosome length, starting on a 100 kb boundary) and prints the seed in the plot title. `--seed N` repeats a draw and `--region CHROM:START` plots a given window.
+
+Script: `scripts/plot_random_region.py`  
+Outputs: `results/region_<chrom>_<start>-<end>Mb_ogut_vs_hier.png`
+
+```bash
+python scripts/plot_random_region.py --seed 717987               # Chr3:2.4-12.4 Mb
+python scripts/plot_random_region.py --seed 929979               # Chr1:158.6-168.6 Mb
 ```
 
 ### Recombination Rate Around Genes

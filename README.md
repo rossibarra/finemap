@@ -55,6 +55,14 @@ The Ogut map (AGPv2 markers lifted to v5) against `finemap_v5.bed` on all ten ch
 
 ![Marey map: Ogut vs finemap_v5](results/marey_ogut_vs_finemap.png)
 
+### Local Rate: Ogut vs finemap_hierarchical_v5
+
+cM/Mb in two randomly drawn 10 Mb windows, with the Ogut rate computed by interpolating Ogut cM at the same 100 kb bin edges as the hierarchical map. Orange ticks mark Ogut markers; the lower strip is a rug of gene midpoints. In the gene-rich distal arm of chromosome 3 (139 Ogut markers), both maps show the same broad decline in rate away from the telomere, but the hierarchical map resolves sub-Mb peaks, often over gene clusters, that the Ogut map smooths out (r = 0.45 across 100 kb bins). On the long arm of chromosome 1, only 6 Ogut markers fall in the window, so the Ogut rate is nearly flat, while the hierarchical map varies about tenfold, with its lowest rates in gene-poor stretches.
+
+![Local rate: Chr3 2.4–12.4 Mb](results/region_Chr3_2.4-12.4Mb_ogut_vs_hier.png)
+
+![Local rate: Chr1 158.6–168.6 Mb](results/region_Chr1_158.6-168.6Mb_ogut_vs_hier.png)
+
 ### Recombination Rate Around Genes
 
 Mean recombination rate across 39,418 protein-coding genes (5 kb flanks, 500 bp windows at each gene end) rises from about 1.2 cM/Mb at ±5 kb to about 1.7 cM/Mb at the TSS and TTS and peaks near 2.0 cM/Mb inside the gene, well above the genome-wide mean of 0.70 cM/Mb because genes sit mostly in the high-recombination chromosome arms. Averaging details are in [PIPELINE.md](PIPELINE.md#recombination-rate-around-genes).

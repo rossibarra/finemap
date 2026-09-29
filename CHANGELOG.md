@@ -28,6 +28,7 @@ Fixes from a second pipeline review, a stricter lift-over, and a full rebuild.
 - **Release check:** add `scripts/check_release.py`. It verifies HMM, lift-over, `jri_v5.bed`, map, hapmap and hotspot consistency, and records content hashes in `data/provenance_manifest.json`. `results/hmm_co_events_long.tsv` and `results/hmm_sample_roster.tsv` are now tracked.
 - **Docs and tests:**
   - README reduced to method and results; reproduction steps moved to `PIPELINE.md`.
+  - Add `scripts/plot_random_region.py`, which plots Ogut vs `finemap_hierarchical_v5.bed` cM/Mb over a 10 Mb window with a gene rug; the README shows two random windows (Chr3:2.4–12.4 Mb, Chr1:158.6–168.6 Mb).
   - The stale `results/finemap-map-comparison*.png` figures are removed.
   - Unit tests are added under `tests/`, and self-tests to several scripts.
 
