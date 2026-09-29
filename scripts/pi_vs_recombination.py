@@ -6,8 +6,8 @@ population, the Spearman correlation between pi and cM/Mb.
 
 Both variables are strongly autocorrelated along a chromosome, so the usual
 asymptotic p-value over ~21k windows is meaningless -- adjacent windows are not
-independent observations.  Uncertainty here comes from a moving-block bootstrap
-that resamples contiguous blocks of windows, which preserves that autocorrelation.
+independent observations. Uncertainty here comes from a chromosome-stratified
+bootstrap of fixed physical blocks. Missing windows do not compress genomic gaps.
 
 Recombination, gene density and pi all covary with distance to the centromere,
 so a partial correlation controlling for gene density and centromere distance is
@@ -49,25 +49,39 @@ def partial_spearman(x, y, covariates):
     return spearman(rx_resid, ry_resid)
 
 
-def block_bootstrap_ci(df, xcol, ycol, block_windows, n_boot, seed, alpha=0.05):
-    """Percentile CI for Spearman rho from a moving-block bootstrap within chromosomes."""
+def physical_blocks(df, block_bp):
+    """Partition rows by chromosome and zero-anchored physical start coordinate."""
+    if block_bp <= 0:
+        raise ValueError("bootstrap block size must be positive")
+    return [g for _, g in df.groupby([df.chrom, df.start // block_bp], sort=True)]
+
+
+def block_bootstrap_ci(df, xcol, ycol, block_windows, n_boot, seed, alpha=0.05,
+                       *, block_bp=None):
+    """Percentile CI from fixed physical blocks, resampled within chromosomes.
+
+    The legacy block_windows argument remains supported for importing scripts;
+    its size is converted to bases using the modal unfiltered window width.
+    All retained rows in a sampled block travel together, including singletons.
+    """
+    if df.empty:
+        return (np.nan, np.nan)
+    if block_bp is None:
+        block_bp = int(block_windows * (df.end - df.start).mode().iloc[0])
     rng = np.random.default_rng(seed)
-    blocks = []
+    chromosomes = []
     for _, g in df.groupby("chrom", sort=False):
-        x = np.array(g[xcol], dtype=float)
-        y = np.array(g[ycol], dtype=float)
-        for i in range(0, len(g), block_windows):
-            if i + 2 <= len(g):
-                blocks.append((x[i:i + block_windows], y[i:i + block_windows]))
-    if len(blocks) < 2:
+        chromosomes.append([(b[xcol].to_numpy(float), b[ycol].to_numpy(float))
+                            for b in physical_blocks(g, block_bp)])
+    if not any(len(blocks) > 1 for blocks in chromosomes):
         return (np.nan, np.nan)
 
-    n_target = len(df)
     rhos = []
     for _ in range(n_boot):
-        picks = rng.integers(0, len(blocks), size=int(np.ceil(n_target / block_windows)))
-        xs = np.concatenate([blocks[p][0] for p in picks])
-        ys = np.concatenate([blocks[p][1] for p in picks])
+        sampled = [blocks[p] for blocks in chromosomes
+                   for p in rng.integers(0, len(blocks), size=len(blocks))]
+        xs = np.concatenate([b[0] for b in sampled])
+        ys = np.concatenate([b[1] for b in sampled])
         rho = spearman(xs, ys)
         if not np.isnan(rho):
             rhos.append(rho)
@@ -164,7 +178,8 @@ def main():
     rows = []
     for pop, g in df.groupby("pop"):
         rho = spearman(g.rate, g.avg_pi)
-        lo, hi = block_bootstrap_ci(g, "rate", "avg_pi", block_windows, args.n_boot, args.seed)
+        lo, hi = block_bootstrap_ci(g, "rate", "avg_pi", block_windows, args.n_boot, args.seed,
+                                   block_bp=int(args.block_mb * 1e6))
         partial = (partial_spearman(g.rate, g.avg_pi, [g[c] for c in covariate_names])
                    if covariate_names else np.nan)
         rho_sites = spearman(g.rate, g.no_sites)

@@ -15,6 +15,7 @@ DEFAULT_INPUT_XLSX = Path("data/gb-2013-14-9-r103-S4.xlsx")
 MATRIX_DIR = Path("results/hmm_cleaned_matrices")
 HMM_EVENTS_OUTPUT = Path("results/hmm_co_events_long.tsv")
 QC_SUMMARY_OUTPUT = Path("results/hmm_qc_summary.tsv")
+SAMPLE_ROSTER_OUTPUT = Path("results/hmm_sample_roster.tsv")
 
 MISSINGNESS_MAX = 0.20
 ALLELE_BALANCE_MIN = 0.10
@@ -62,6 +63,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_INPUT_XLSX,
         help=f"Input workbook path. Default: {DEFAULT_INPUT_XLSX}",
+    )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Run synthetic checks of interval bracketing and flip QC, then exit.",
     )
     return parser.parse_args()
 
@@ -135,7 +141,7 @@ def marker_missingness(genotypes: str, kept_samples: list[int] | None = None) ->
     indices = kept_samples if kept_samples is not None else range(len(genotypes))
     for idx in indices:
         total += 1
-        if genotypes[idx] not in {"A", "B"}:
+        if idx >= len(genotypes) or genotypes[idx] not in {"A", "B"}:
             missing += 1
     return missing / total if total else 1.0
 
@@ -145,6 +151,8 @@ def allele_balance(genotypes: str, kept_samples: list[int] | None = None) -> flo
     b_count = 0
     indices = kept_samples if kept_samples is not None else range(len(genotypes))
     for idx in indices:
+        if idx >= len(genotypes):
+            continue
         if genotypes[idx] == "A":
             a_count += 1
         elif genotypes[idx] == "B":
@@ -157,6 +165,9 @@ def allele_balance(genotypes: str, kept_samples: list[int] | None = None) -> flo
 
 def isolated_flip_rate(markers: list[Marker], marker_idx: int) -> float:
     if marker_idx == 0 or marker_idx == len(markers) - 1:
+        return 0.0
+    if not (markers[marker_idx - 1].chromosome == markers[marker_idx].chromosome
+            == markers[marker_idx + 1].chromosome):
         return 0.0
 
     left = markers[marker_idx - 1].genotypes
@@ -181,7 +192,7 @@ def isolated_flip_rate(markers: list[Marker], marker_idx: int) -> float:
 
 
 def compute_sample_missingness(markers: list[Marker]) -> list[float]:
-    sample_count = max(len(marker.genotypes) for marker in markers)
+    sample_count = max((len(marker.genotypes) for marker in markers), default=0)
     totals = [0] * sample_count
     missings = [0] * sample_count
 
@@ -235,6 +246,7 @@ def clean_population(markers: list[Marker]) -> tuple[list[Marker], list[int], Co
     summary["removed_markers_allele_balance"] = len(missingness_filtered) - len(balance_filtered)
 
     balance_filtered.sort(key=lambda marker: (marker.chromosome, marker.coordinate, marker.snp_name))
+    balance_filtered = [subset_marker(marker, kept_samples) for marker in balance_filtered]
     flip_filtered = []
     for idx, marker in enumerate(balance_filtered):
         if isolated_flip_rate(balance_filtered, idx) > ISOLATED_FLIP_MAX:
@@ -242,20 +254,19 @@ def clean_population(markers: list[Marker]) -> tuple[list[Marker], list[int], Co
         flip_filtered.append(marker)
     summary["removed_markers_isolated_flip"] = len(balance_filtered) - len(flip_filtered)
 
-    final_markers = [subset_marker(marker, kept_samples) for marker in flip_filtered]
+    final_markers = flip_filtered
     summary["final_markers"] = len(final_markers)
     return final_markers, kept_samples, summary
 
 
-def write_clean_matrix(map_name: str, markers: list[Marker]) -> None:
+def write_clean_matrix(map_name: str, markers: list[Marker], kept_samples: list[int]) -> None:
     MATRIX_DIR.mkdir(parents=True, exist_ok=True)
     if not markers:
         return
-    sample_count = len(markers[0].genotypes)
     path = MATRIX_DIR / f"{map_name}.tsv"
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t")
-        writer.writerow(["chromosome", "coordinate", "snp_name", *[f"{map_name}_ind{i + 1:03d}" for i in range(sample_count)]])
+        writer.writerow(["chromosome", "coordinate", "snp_name", *[f"{map_name}_ind{i + 1:03d}" for i in kept_samples]])
         for marker in markers:
             writer.writerow([marker.chromosome, marker.coordinate, marker.snp_name, *list(marker.genotypes)])
 
@@ -315,6 +326,11 @@ def viterbi_decode(markers: list[Marker], sample_idx: int) -> list[int]:
 
 
 def collapse_close_double_cos(events: list[HMMEvent]) -> list[HMMEvent]:
+    """Delete both calls in successive pairs within 2 Mb; do not merge them.
+
+    Distance is between the midpoints (``event_bp``) of the observation-supported
+    brackets, so widening a bracket moves its midpoint but not the 2-Mb rule.
+    """
     keep = [True] * len(events)
     idx = 0
     while idx < len(events) - 1:
@@ -329,15 +345,36 @@ def collapse_close_double_cos(events: list[HMMEvent]) -> list[HMMEvent]:
     return [event for event, keep_flag in zip(events, keep) if keep_flag]
 
 
-def build_hmm_events(map_name: str, markers: list[Marker]) -> list[HMMEvent]:
+def supported_breakpoints(markers: list[Marker], decoded: list[int], sample_idx: int):
+    """Bracket switches by supporting observations within adjacent decoded runs.
+
+    Missing/discordant calls cannot narrow an interval. An unsupported run has
+    no defensible observation bracket, so its adjoining switches are omitted.
+    """
+    if not decoded:
+        return
+    boundaries = [0] + [i for i in range(1, len(decoded)) if decoded[i] != decoded[i - 1]] + [len(decoded)]
+    supports = []
+    for start, end in zip(boundaries, boundaries[1:]):
+        state = "AB"[decoded[start]]
+        supports.append([i for i in range(start, end) if markers[i].genotypes[sample_idx] == state])
+    for left, right in zip(supports, supports[1:]):
+        if left and right:
+            yield left[-1], right[0]
+
+
+def build_hmm_events(map_name: str, markers: list[Marker], kept_samples: list[int] | None = None) -> list[HMMEvent]:
     events: list[HMMEvent] = []
     markers_by_chr: dict[int, list[Marker]] = defaultdict(list)
     for marker in markers:
         markers_by_chr[marker.chromosome].append(marker)
 
     sample_count = len(markers[0].genotypes) if markers else 0
+    original_indices = list(range(sample_count)) if kept_samples is None else kept_samples
+    if len(original_indices) != sample_count:
+        raise ValueError("Sample index roster does not match cleaned genotypes")
     for sample_idx in range(sample_count):
-        sample_id = f"{map_name}_ind{sample_idx + 1:03d}"
+        sample_id = f"{map_name}_ind{original_indices[sample_idx] + 1:03d}"
         sample_events: list[HMMEvent] = []
 
         for chromosome, chromosome_markers in sorted(markers_by_chr.items()):
@@ -345,13 +382,11 @@ def build_hmm_events(map_name: str, markers: list[Marker]) -> list[HMMEvent]:
             if not decoded:
                 continue
 
-            for idx in range(1, len(decoded)):
-                if decoded[idx] == decoded[idx - 1]:
-                    continue
-                left_marker = chromosome_markers[idx - 1]
-                right_marker = chromosome_markers[idx]
-                left_state = "A" if decoded[idx - 1] == 0 else "B"
-                right_state = "A" if decoded[idx] == 0 else "B"
+            for left_idx, right_idx in supported_breakpoints(chromosome_markers, decoded, sample_idx):
+                left_marker = chromosome_markers[left_idx]
+                right_marker = chromosome_markers[right_idx]
+                left_state = "AB"[decoded[left_idx]]
+                right_state = "AB"[decoded[right_idx]]
                 sample_events.append(
                     HMMEvent(
                         sample_id=sample_id,
@@ -444,19 +479,51 @@ def write_qc_summary(rows: list[dict[str, int | str]]) -> None:
         writer.writerows(rows)
 
 
+def self_test() -> None:
+    """Synthetic checks: observation-supported brackets and per-chromosome flip QC."""
+    def synthetic(observations: str) -> list[Marker]:
+        return [Marker(1, i * 1_000_000, f"m{i}", gt) for i, gt in enumerate(observations)]
+
+    # AAA---BBB: missing calls must not narrow the bracket to the 1-Mb step at
+    # the decoded switch; the supporting calls are at 2 Mb and 6 Mb.
+    events = build_hmm_events("pop", synthetic("AAA---BBB"))
+    assert [(e.left_coordinate, e.right_coordinate) for e in events] == [(2_000_000, 6_000_000)], events
+    # A discordant call beside the switch widens the bracket to the concordant calls.
+    assert list(supported_breakpoints(synthetic("AABABB"), [0, 0, 0, 1, 1, 1], 0)) == [(1, 4)]
+
+    # ABA across a chromosome boundary is not an isolated flip; within one it is.
+    markers = synthetic("ABA")
+    markers[2].chromosome = 2
+    assert isolated_flip_rate(markers, 1) == 0.0
+    markers[2].chromosome = 1
+    assert isolated_flip_rate(markers, 1) == 1.0
+
+    # An excluded (high-missingness) individual must not drive flip QC: sample 2
+    # flips at marker 1 but is dropped, so no marker is removed.
+    cleaned, kept, summary = clean_population(synthetic(["ABA", "ABB", "ABA", "AB-", "AB-", "AB-"]))
+    assert kept == [0, 1] and summary["removed_markers_isolated_flip"] == 0 and len(cleaned) == 6
+    print("hmm_co_pipeline self-test passed")
+
+
 def main() -> None:
     args = parse_args()
+    if args.self_test:
+        self_test()
+        return
     os.environ.setdefault("MPLCONFIGDIR", "/tmp/finemap-mpl")
     MATRIX_DIR.mkdir(parents=True, exist_ok=True)
 
     markers_by_map = load_markers(args.input_xlsx)
     all_events: list[HMMEvent] = []
     qc_rows: list[dict[str, int | str]] = []
+    roster_rows = []
 
     for map_name, markers in sorted(markers_by_map.items()):
-        clean_markers, _, summary = clean_population(markers)
-        write_clean_matrix(map_name, clean_markers)
-        hmm_events = build_hmm_events(map_name, clean_markers)
+        clean_markers, kept_samples, summary = clean_population(markers)
+        write_clean_matrix(map_name, clean_markers, kept_samples)
+        hmm_events = build_hmm_events(map_name, clean_markers, kept_samples)
+        for chromosome in sorted({marker.chromosome for marker in clean_markers}):
+            roster_rows.extend((f"{map_name}_ind{i + 1:03d}", map_name, chromosome) for i in kept_samples)
         all_events.extend(hmm_events)
         qc_rows.append(
             {
@@ -477,6 +544,10 @@ def main() -> None:
 
     write_hmm_events(all_events)
     write_qc_summary(qc_rows)
+    with SAMPLE_ROSTER_OUTPUT.open("w", newline="") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(["sample_id", "map", "chromosome"])
+        writer.writerows(roster_rows)
     print(
         f"Wrote {len(all_events)} HMM-based CO intervals to {HMM_EVENTS_OUTPUT}, "
         f"cleaned matrices to {MATRIX_DIR}, and QC summary to {QC_SUMMARY_OUTPUT}"

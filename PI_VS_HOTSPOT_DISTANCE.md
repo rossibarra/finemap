@@ -2,10 +2,10 @@
 
 This began as an attempt to test whether nucleotide diversity (π) is elevated near
 recombination hotspots. It ended as a negative methodological result, which is the more
-useful finding: **`finemap_v5.bed` has no genuine resolution below roughly 100 kb, so
-hotspots cannot be defined from it at the kb scale.** Apparent fine-scale hotspots are an
-artifact of how crossover weight is distributed during map construction, not a feature of
-recombination.
+useful finding: **kb-scale structure in `finemap_v5.bed` is dominated by a few narrow
+crossover intervals, so hotspots cannot be reliably defined from it at the kb scale.**
+Apparent fine-scale hotspots largely reflect how crossover weight is distributed during map
+construction, not a feature of recombination.
 
 Anyone planning to use the interval-density map at fine scale should read this first.
 
@@ -27,8 +27,8 @@ Anyone planning to use the interval-density map at fine scale should read this f
 
 ### How the Map Distributes Crossover Weight
 
-`scripts/build_finemap.py` assigns each crossover interval a weight of `1 / (end - start)`
-and spreads it **uniformly** across the interval:
+`scripts/build_finemap.py` spreads each crossover **uniformly** across its interval,
+adding `1 / (end - start)` to every base pair, so each interval integrates to one event:
 
 ```python
 jri["weight"] = 1.0 / (jri["end"] - jri["start"])
@@ -36,8 +36,8 @@ jri["weight"] = 1.0 / (jri["end"] - jri["start"])
 
 This is a sensible choice — a crossover known only to lie somewhere within an interval
 should contribute evenly across it. But it has a consequence that matters enormously at
-fine scale. Because the weight is spread over the interval, the weight *density* per base
-pair goes as **1 / width²**.
+fine scale. Because one event is spread over the interval, the weight *density* per base
+pair goes as **1 / width**.
 
 The source crossover intervals in `data/jri_v5.bed` (n = 409,510) are wide:
 
@@ -53,13 +53,13 @@ The source crossover intervals in `data/jri_v5.bed` (n = 409,510) are wide:
 
 59.7% are wider than 100 kb; only 8.2% are narrower than 10 kb.
 
-Combining the two facts: a 100 bp interval deposits **1,832,125×** the per-bp weight of a
-median interval, and a 10 kb interval deposits 183×. The typical crossover contributes a
+Combining the two facts: a 100 bp interval deposits **~1,354×** the per-bp weight of a
+median interval, and a 10 kb interval deposits ~13.5×. The typical crossover contributes a
 broad, almost flat smear, while the rare narrow interval contributes a spike.
 
 ![FineMap resolution diagnostic](results/finemap_resolution.png)
 
-So every sharp feature in the map at kb scale traces back to a handful of atypically
+So sharp features in the map at kb scale trace back largely to a minority of atypically
 narrow crossover intervals. Interval width is set by marker density in the source crosses —
 where informative markers happen to be dense, a crossover is localized tightly. That is a
 property of the genotyping, not of recombination.
@@ -230,9 +230,9 @@ A real test needs recombination data with genuine kb-scale resolution:
 - **Tight-interval crossover data** — pollen typing, sperm typing, or sequencing of very
   large mapping populations at high marker density — gives direct, unconfounded
   localization.
-- **Failing either**, restrict FineMap analyses to ≥ 100 kb, where the map is well
-  supported. The 0D/4D and all-sites analyses in this repository are at 100 kb and are not
-  affected by this problem.
+- **Failing either**, prefer coarser FineMap analyses (e.g. ≥ 100 kb), which average over
+  many intervals. The 0D/4D and all-sites analyses in this repository are at 100 kb; the
+  effect on them is expected to be smaller, but this was not tested directly.
 
 ## Reproducing the Diagnostic
 

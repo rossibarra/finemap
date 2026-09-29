@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Diagnose the fine-scale resolution limit of the FineMap interval-density map.
 
-build_finemap.py assigns each crossover a weight of 1/(end - start) and spreads it
-uniformly across its interval.  Per-bp weight density therefore scales as 1/width^2,
-so a handful of unusually narrow crossover intervals dominate all fine-scale structure
-in the map while the typical interval contributes a broad, flat smear.
+build_finemap.py spreads one crossover uniformly across its interval, assigning
+a per-bp density of 1/(end - start). Narrow intervals therefore have higher local
+density, although every interval integrates to the same total crossover weight.
 
 This script quantifies that: the width distribution of the source crossover intervals,
-the 1/width^2 weighting, and -- if a hotspot BED is supplied -- the share of each
+the 1/width density, and -- if a hotspot BED is supplied -- the share of each
 apparent hotspot's crossover weight that comes from atypically narrow intervals.
 """
 
@@ -91,14 +90,14 @@ def main():
 
     ax = axes[1]
     w = np.logspace(2, 7, 200)
-    ax.loglog(w, 1 / w**2, color="#2E7D5B", lw=1.8)
+    ax.loglog(w, 1 / w, color="#2E7D5B", lw=1.8)
     ax.axvline(med, color="#B8860B", lw=1.6)
-    ax.annotate(f"a 100 bp interval carries\n{(1/100**2)/(1/med**2):,.0f}× the per-bp weight\nof a median interval",
-                xy=(100, 1e-4), xytext=(2.5e3, 2e-5), fontsize=8,
+    ax.annotate(f"a 100 bp interval carries\n{med/100:,.0f}× the per-bp weight\nof a median interval",
+                xy=(100, 1e-2), xytext=(2.5e3, 2e-3), fontsize=8,
                 arrowprops=dict(arrowstyle="->", lw=0.9, color="#555555"))
     ax.set_xlabel("interval width (bp)")
-    ax.set_ylabel("weight per bp  (1/width²)")
-    ax.set_title("Narrow intervals dominate\nfine-scale structure")
+    ax.set_ylabel("weight per bp  (1/width)")
+    ax.set_title("Narrow intervals have\nhigher local density")
 
     if frac is not None:
         ax = axes[2]
@@ -107,7 +106,7 @@ def main():
                    label=f"median {np.median(frac):.0%}")
         ax.set_xlabel(f"% of hotspot CO weight from intervals < {NARROW//1000} kb")
         ax.set_ylabel("hotspots")
-        ax.set_title("Apparent hotspots are built\nfrom the narrow tail")
+        ax.set_title("Hotspot contribution\nfrom narrow intervals")
         ax.legend(frameon=False, fontsize=8)
 
     for a in axes:

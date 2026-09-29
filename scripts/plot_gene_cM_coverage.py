@@ -30,6 +30,7 @@ def load_genes():
         usecols=[0, 2, 3, 4], names=["chr", "feature", "start", "end"],
     )
     gff = gff[gff["feature"] == "gene"].copy()
+    gff["start"] -= 1  # GFF starts are 1-based; overlap calculations use BED coordinates.
     gff["chr"] = gff["chr"].str.lower()
     return gff[gff["chr"].isin(CHROMS)]
 

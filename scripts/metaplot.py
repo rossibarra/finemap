@@ -214,6 +214,7 @@ def build_signal_dict(df):
                 "start": starts[order],
                 "end": ends[order],
                 "value": values[order],
+                "prefix_max_end": np.maximum.accumulate(ends[order]),
             }
         else:
             mids = sub["mid"].to_numpy(dtype=np.int64, copy=True)
@@ -242,9 +243,12 @@ def window_overlaps(chrom_signal, window_start, window_end):
     ends = chrom_signal["end"]
     values = chrom_signal["value"]
     right = np.searchsorted(starts, window_end, side="left")
-    starts = starts[:right]
-    ends = ends[:right]
-    values = values[:right]
+    prefix_max_end = chrom_signal.get("prefix_max_end")
+    left = (np.searchsorted(prefix_max_end, window_start, side="right")
+            if prefix_max_end is not None else 0)
+    starts = starts[left:right]
+    ends = ends[left:right]
+    values = values[left:right]
     overlap = np.minimum(ends, window_end) - np.maximum(starts, window_start)
     positive = overlap > 0
     return starts[positive], ends[positive], values[positive], overlap[positive]

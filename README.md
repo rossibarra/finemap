@@ -72,7 +72,7 @@ Ogut F et al. 2015. *Joint-multiple family linkage analysis predicts within-fami
 
 ### Step 1 — European HMM Crossover Calling
 
-European crossovers were called from the Bauer et al. SNP workbook (`data/gb-2013-14-9-r103-S4.xlsx`, sheet `Table_S3`) using an HMM pipeline. This produces the 32,439 European intervals (27,328 after lift-over) that feed into `data/jri_v5.bed`.
+European crossovers were called from the Bauer et al. SNP workbook (`data/gb-2013-14-9-r103-S4.xlsx`, sheet `Table_S3`) using an HMM pipeline. This produces the 32,548 European intervals that feed into `data/jri_v5.bed` (lift-over counts are in Step 2).
 
 Script: `scripts/hmm_co_pipeline.py`
 
@@ -88,11 +88,11 @@ python scripts/hmm_co_pipeline.py \
 3. Remove individuals with missingness > 0.30.
 4. Remove markers with missingness > 0.20.
 5. Remove markers with informative A fraction outside 0.10–0.90.
-6. Remove markers with isolated-flip rate > 0.12.
+6. Remove markers with isolated-flip rate > 0.12. The rate is computed on the retained individuals only, and only between neighbouring markers on the same chromosome (the first and last marker of each chromosome are never flagged).
 
-This run retained 23 cleaned population matrices and 2,209 individuals.
+This run retained 23 cleaned population matrices, 2,209 individuals and 275,076 markers.
 
-**HMM model:** run per population, chromosome, and individual. States: `A`, `B`. Emissions: match 0.98, mismatch 0.02, missing 0.50. Distance-aware transitions: base rate 1e-8 per bp, clamped to [1e-6, 0.05]. Decoded with Viterbi. A crossover interval is called at each state change; adjacent events within 2,000,000 bp are merged. Produced 32,439 intervals.
+**HMM model:** run per population, chromosome, and individual. States: `A`, `B`. Emissions: match 0.98, mismatch 0.02, missing 0.50. Distance-aware transitions: base rate 1e-8 per bp, clamped to [1e-6, 0.05]. Decoded with Viterbi. A crossover is called at each state change, and its interval runs from the last marker before the change whose observed genotype matches the left decoded state to the first marker after it whose genotype matches the right decoded state; missing or discordant genotypes next to the change widen the interval rather than narrow it. If two successive calls in an individual on one chromosome have interval midpoints within 2,000,000 bp, both are discarded as a likely genotyping artefact (they are not merged). Produced 32,548 intervals (median width 293 kb; 5th–95th percentile 27 kb–6.26 Mb). `python scripts/hmm_co_pipeline.py --self-test` checks the interval and flip rules on synthetic data.
 
 Regenerated intermediate outputs: `results/hmm_cleaned_matrices/`, `results/hmm_co_events_long.tsv`, `results/hmm_qc_summary.tsv`. These are not tracked in the repository; rerun this step before using commands that consume `results/hmm_co_events_long.tsv`.
 
@@ -202,7 +202,9 @@ Script: `scripts/build_hierarchical_finemap.py`
 python scripts/build_hierarchical_finemap.py
 ```
 
-Key options are `--bin-size`, `--smoothness`, `--iterations`, `--learning-rate`, and `--output`. The defaults reproduce `data/finemap_hierarchical_v5.bed`.
+Key options are `--bin-size`, `--smoothness`, `--iterations`, `--learning-rate`, `--tolerance`, `--rate-tolerance`, `--stability-window`, and `--output`. The defaults reproduce `data/finemap_hierarchical_v5.bed`.
+
+**Optimization and convergence.** Each chromosome is fitted by line-searched Newton-CG using exact Hessian-vector products, typically in 14–19 iterations and about 1 s per chromosome. A fit is accepted only when both conditions hold: (i) the largest absolute gradient of the log posterior with respect to any bin's log-rate is at most `--tolerance` (default `1e-6`, in expected crossovers per bin); and (ii) no normalized bin rate has changed by more than `--rate-tolerance` (default `1e-6`, relative) over the last `--stability-window` iterations (default 3). The fit never stops on relative change in the objective, because the log-likelihood carries a large additive constant that says nothing about whether local rates have stabilized. The script prints a per-chromosome summary (iterations, final max |gradient|, max relative rate change, converged). If a chromosome reaches `--iterations` (default 200) first, the script stops with an error and writes no map. An earlier version stopped when the relative change in the objective fell below `1e-7`. On Chr1 that rule stopped after 333 iterations, 2.7 log-likelihood units short of the optimum. At that point 5% of bins were more than 10% away from their converged rates, and the largest gap was about 30%. Sensitivity check on the current inputs: tightening both tolerances 10× or 100× changes per-bin rates by at most 2×10⁻¹¹ on every chromosome. Loosening them to `1e-3` changes rates by at most 2×10⁻⁵. This check shows the optimizer has converged for the chosen `--bin-size` and `--smoothness`. It does not measure the statistical uncertainty of the map, and it does not show how sensitive the map is to those settings.
 
 ### Step 5 — HapMap Exports
 
@@ -320,7 +322,7 @@ Output: `results/pi_vs_recombination.png`
 
 Full walkthrough: [PI_VS_RECOMBINATION.md](PI_VS_RECOMBINATION.md)
 
-The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any all-sites VCF.
+The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any gzipped, one-chromosome-per-file all-sites VCF with haploid calls (FORMAT containing a `GT` key, each `GT` a single allele index or `.`); diploid or polyploid genotypes are rejected.
 
 ![π vs recombination rate](results/pi_vs_recombination.png)
 
@@ -347,24 +349,26 @@ The genotype data used for this analysis are unpublished and are not distributed
 
 An attempt to relate π to distance from recombination hotspots instead established a
 methodological limit worth knowing before using `finemap_v5.bed` at fine scale:
-**the interval-density map has no genuine resolution below roughly 100 kb.**
+**kb-scale structure in the interval-density map is dominated by a few narrow crossover intervals.**
 
-`build_finemap.py` gives each crossover a weight of `1/(end - start)` spread uniformly
-across its interval, so per-bp weight density scales as 1/width². The source crossover
+`build_finemap.py` spreads each crossover uniformly across its interval at a per-bp density
+of `1/(end - start)`, so every interval contributes one event in total but narrow intervals
+concentrate it: a 100 bp interval has ~1,354× the per-bp density of a median one. The source crossover
 intervals have a median width of 135 kb, and only 8.2% are narrower than 10 kb — yet that
 narrow tail supplies a median 78% of the crossover weight in any hotspot called from the
-map. Apparent kb-scale hotspots track marker density in the source crosses, not
-recombination. Controlling for local background rate cannot rescue the analysis either,
+map. Apparent kb-scale hotspots therefore largely track marker density in the source
+crosses rather than recombination. Controlling for local background rate cannot rescue the analysis either,
 since the background rate is built from the same smeared crossovers.
 
-Analyses at 100 kb and coarser — including the two above — are unaffected.
+Analyses at 100 kb and coarser — including the two above — average over many intervals, so
+the effect on them is expected to be smaller, but this was not tested directly.
 
 Scripts: `scripts/finemap_resolution.py`, `scripts/define_hotspots.py`, `scripts/define_hotspots_sliding.py`, `scripts/pi_vs_hotspot_distance.py`  
 Output: `results/finemap_resolution.png`
 
 Full writeup: [PI_VS_HOTSPOT_DISTANCE.md](PI_VS_HOTSPOT_DISTANCE.md)
 
-The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any all-sites VCF.
+The genotype data used for this analysis are unpublished and are not distributed with this repository; the scripts run against any gzipped, one-chromosome-per-file all-sites VCF with haploid calls (FORMAT containing a `GT` key, each `GT` a single allele index or `.`); diploid or polyploid genotypes are rejected.
 
 ![FineMap resolution diagnostic](results/finemap_resolution.png)
 

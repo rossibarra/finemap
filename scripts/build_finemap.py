@@ -35,7 +35,7 @@ def sweep_line_weights(sub):
 
     merged = [segs[0]]
     for s, e, w in segs[1:]:
-        if abs(merged[-1][2] - w) < 1e-15:
+        if merged[-1][1] == s and abs(merged[-1][2] - w) < 1e-15:
             merged[-1][1] = e
         else:
             merged.append([s, e, w])

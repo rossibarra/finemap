@@ -26,8 +26,13 @@ character, one allele per sample), produced upstream by `argprep.maf_to_sites`.
 
 **These VCFs are unpublished and are not distributed with this repository.** Neither are
 the π tables derived from them; `data/pixy/` is git-ignored. The scripts below are
-general, so the analysis can be rerun against any all-sites VCF once such data are
-available.
+general, so the analysis can be rerun against other all-sites VCFs once such data are
+available, provided they are haploid: one gzipped VCF per chromosome, `FORMAT` containing
+exactly one `GT` key (`GT`, `GT:DP`, `DP:GT`, ...), and each sample's `GT` a single allele
+index present in `ALT` or `.`. Diploid or polyploid calls (`0/0`, `0|1`, `./.`) and records
+without `GT` are rejected with an error rather than guessed at. `GT`-only records with
+one-character fields (the layout of these VCFs) are parsed on a vectorised fast path;
+`haploid_pi.py --self-test` checks the parser.
 
 Two properties of these files matter downstream:
 
@@ -126,7 +131,7 @@ four minutes.
 
 | Argument | Description |
 |----------|-------------|
-| `--vcf` | One gzipped VCF per chromosome; plain gzip is fine (no BGZF or index needed) |
+| `--vcf` | One gzipped VCF per chromosome; plain gzip is fine (no BGZF or index needed). Haploid `GT` only (see Input Data) |
 | `--populations` | `sample<TAB>population`, no header |
 | `--windows` | BED tiling each chromosome from 0 without gaps |
 | `--window-size` | Window width in bp, default 100000 |
